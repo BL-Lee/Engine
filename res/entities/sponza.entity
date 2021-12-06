@@ -1,0 +1,4 @@
+#scale 0.005 0.005 0.005
+#meshFile res/models/sponza.meshes
+#vert res/shaders/plainTextureVertex.glsl
+#frag res/shaders/plainTextureFrag.glsl

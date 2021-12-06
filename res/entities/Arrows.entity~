@@ -1,0 +1,5 @@
+#position 0.0 0.0 0.0
+#scale 1.0 1.0 1.0
+#meshes res/models/arrows.meshes
+#vert res/shaders/normalVisVertex.glsl
+#frag res/shaders/normalVisFrag.glsl
