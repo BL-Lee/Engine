@@ -1,6 +1,0 @@
-#scale 0.1 0.1 0.1
-#position 0.0 0.0 0.0
-#rotation 0.0 0.0 0.0
-#meshFile res/models/Dodecahedron.stl
-#vert res/shaders/normalVisVertex.glsl
-#frag res/shaders/normalVisFrag.glsl

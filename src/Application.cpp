@@ -43,6 +43,8 @@ typedef int64_t  s64;
 typedef float    f32;
 typedef double   f64; 
 
+//-5.3 8.5 4.65
+
 //Handmade includes
 #define HMM_PREFIX
 #define HANDMADE_MATH_IMPLEMENTATION
@@ -72,6 +74,7 @@ static f32 GPUTotalTime;
 //TODO: entity selection in debug
 static s32 entitySelected = -1;
 
+
 //Temp Global
 static f32 globalKerning = 1.0;
 static f32 fontSize = 1.0f;
@@ -85,6 +88,7 @@ static f32 fontSize = 1.0f;
 #include "Shader.cpp"
 #include "Collision.cpp"
 #include "Mesh.cpp"
+#include "MD5Loader.cpp"
 #include "Renderer.cpp"
 #include "STL.cpp"
 #include "OBJLoader.cpp"
@@ -92,40 +96,46 @@ static f32 fontSize = 1.0f;
 #include "EntityRegistry.cpp"
 #include "Random.cpp"
 #include "Timer.h"
-#include "Bitmap.cpp"
+//#include "Bitmap.cpp"
 #include "UI.cpp"
 #include "Font.cpp"
 #include "Scene.cpp"
 
 static u32 translationArrows;
+static Entity* bob;
+static int bobFrame = 0;
+static SkinnedAnimation* anim;
+static f32 frameElapsed = 0.0f;
+static SkinnedMesh* bobMesh;
 #include "DebugConsole.cpp"
 
 static Font* mainFont;
 
 static TextElement globalPopupText;
-
+static vec3 testRayDir;
+static vec3 testRayOrigin;
 
 //Game related
 #include "CaveGeneration.cpp"
-/*
+
 Mesh* selectMesh(double mouse_x, double mouse_y)
 {
   f32 hitDist = FLT_MAX;
   vec3 hitLoc;
   Ray ray;
   vec4 zero = {0.0,0.0,0.0,1.0};
-  vec4 rayOrigin = (mainCamera.viewMatrix * zero);
-  ray.origin = rayOrigin.xyz / rayOrigin.w;
-
+  ray.origin = getCameraPos(&mainCamera);
+  
   vec4 one = {0.0,0.0,-1.0,0.0};
-  ray.direction = (mainCamera.viewMatrix * one).xyz;
+  ray.direction = (mainCamera.invViewMatrix * one).xyz;
 
   Entity* entityHit = NULL;
   Mesh* meshHit = NULL;
-  
-  printf("origin: %f %f %f\n", ray.origin.x, ray.origin.y, ray.origin.z);
-  printf("direction: %f %f %f\n", ray.direction.x, ray.direction.y, ray.direction.z);
-    
+  //testRayDir = ray.direction;
+  //testRayOrigin = ray.origin;
+  //printf("origin: %f %f %f\n", ray.origin.x, ray.origin.y, ray.origin.z);
+  //printf("direction: %f %f %f\n", ray.direction.x, ray.direction.y, ray.direction.z);
+
     for (int i = 0; i < MAX_REGISTRY_SIZE; i++)
     {
       if (globalEntityRegistry->occupiedIndices[i] && globalEntityRegistry->entities[i].meshes)
@@ -133,37 +143,86 @@ Mesh* selectMesh(double mouse_x, double mouse_y)
 	  Entity* e = globalEntityRegistry->entities + i;
 	  if (e->visible)
 	    {
+	      
+	      mat4 modelMatrix = 
+		{
+		  e->scale.x,    0.0,              0.0,              0.0,
+		  0.0,              e->scale.y,    0.0,              0.0,
+		  0.0,              0.0,              e->scale.z,    0.0,
+		  e->position.x, e->position.y, e->position.z, 1.0
+		};
+	      f32 a = e->rotation.x;
+	      f32 b = e->rotation.y;
+	      f32 c = e->rotation.z;
+	      mat4 rotationXMatrix =
+		{
+		  1, 0, 0, 0,
+		  0, cos(-a), -sin(-a), 0,
+		  0, sin(-a), cos(-a), 0,
+		  0, 0, 0, 1
+		};
+	      mat4 rotationYMatrix =
+		{
+		  cos(-b), 0, sin(-b), 0,
+		  0, 1, 0, 0,
+		  -sin(-b), 0, cos(-b), 0,
+		  0, 0, 0, 1
+		};
+	      mat4 rotationZMatrix =
+		{
+		  cos(-c), -sin(-c), 0, 0,
+		  sin(-c), cos(-c), 0, 0,
+		  0, 0, 1, 0,
+		  0, 0, 0, 1
+		};
+	      mat4 rotationMatrix = rotationXMatrix * rotationYMatrix * rotationZMatrix;
+   
+	      modelMatrix = modelMatrix  * rotationMatrix;		
+	      
 	      for (int me = 0; me < e->meshCount; me++)
 		{
 		  Mesh* mesh = e->meshes[me];
 		  for (int index = 0; index < mesh->rendererData.indexCount; index+=3)
 		    {
-		      Vertex vertices[3];
+		      //THESE ARE NOT IN WORLD SPACE YET
+		      vec3 positions[3];
 		      if (mesh->indices)
 			{
-			  vertices[0] =  mesh->vertices[mesh->indices[index + 2]];
-			  vertices[1] =  mesh->vertices[mesh->indices[index + 1]];
-			  vertices[2] =  mesh->vertices[mesh->indices[index + 0]];
+			  positions[0] =  mesh->vertices[mesh->indices[index + 0]].pos;
+			  positions[1] =  mesh->vertices[mesh->indices[index + 1]].pos;
+			  positions[2] =  mesh->vertices[mesh->indices[index + 2]].pos;
 			}
 		      else
 			{
-			  vertices[0] = mesh->vertices[index + 0];
-			  vertices[1] = mesh->vertices[index + 1];
-			  vertices[2] = mesh->vertices[index + 2];
+			  positions[0] = mesh->vertices[index + 0].pos;
+			  positions[1] = mesh->vertices[index + 1].pos;
+			  positions[2] = mesh->vertices[index + 2].pos;
 			}
-
+		      vec4 worldPositions[3] = 
+			{
+			  {positions[0].x,positions[0].y,positions[0].z,1.0},
+			  {positions[1].x,positions[1].y,positions[1].z,1.0},
+			  {positions[2].x,positions[2].y,positions[2].z,1.0}
+			};
+		      for (int b = 0; b < 3; b ++)
+			{
+			  worldPositions[b] = modelMatrix * worldPositions[b];
+			  worldPositions[b] /= worldPositions[b].w;
+			}
+		      
 		      Triangle tri;
-		      tri.v0 = vertices[0].pos;
-		      tri.v1 = vertices[1].pos;
-		      tri.v2 = vertices[2].pos;
+		      tri.v0 = worldPositions[0].xyz;
+		      tri.v1 = worldPositions[1].xyz;
+		      tri.v2 = worldPositions[2].xyz;
+		      
 		      f32 hit;
 		      vec3 loc;
 		      if (rayTriangleCollision(&ray, &tri, &hit, &loc))
 			{
-			  printf("HIT! Dist: %f before: %f\n", hit, hitDist);
-			  
+
 			  if (hit < hitDist && hit > 0.0f)
 			    {
+			      //printf("HIT! Dist: %f before: %f\n\tloc: %f %f %f\n", hit, hitDist, loc.x, loc.y, loc.z);
 			      hitDist = hit;
 			      hitLoc = loc;
 			      entityHit = e;
@@ -177,16 +236,19 @@ Mesh* selectMesh(double mouse_x, double mouse_y)
     }
     if (entityHit)
       {
-	//meshHit->visible = false;
 	entitySelected = entityHit->id;
+	globalRenderData.pointLights[1].position = entityHit->position;
+	Entity* pLight = getEntityById(globalRenderData.pointLights[1].entityGizmoID);
+	pLight->position = entityHit->position;
       }
     return NULL;
 }
 
 void selectMeshCallback(GLFWwindow* window, int button, int action, int mods)
 {
+  //  selectMesh(
 }
-*/
+
 
 void renderWindow()
 {
@@ -195,6 +257,13 @@ void renderWindow()
   ImGui_ImplOpenGL3_NewFrame();
   ImGui_ImplGlfw_NewFrame();
 
+  frameElapsed += globalDeltaTime;
+  if (frameElapsed >= 1 / anim->frameRate) {
+    bobFrame = ( bobFrame + 1 ) % anim->frameCount;
+    frameElapsed = 0.0f;
+    updateVertexPositionsManually(bobMesh, bobFrame);
+  }
+  
   //Render Entities
   startGLTimer(&GPUMeshTimer);
   for (int i = 0; i < MAX_REGISTRY_SIZE; i++)
@@ -242,6 +311,7 @@ void idleFunc()
 {
   globalRenderData.pointLights[0].position.x = sin(globalStopWatch);
   globalRenderData.pointLights[0].position.z = cos(globalStopWatch);
+  
 }
 
 void processInputs()
@@ -330,7 +400,7 @@ void processInputs()
       {
 	double xpos, ypos;
 	glfwGetCursorPos(mainWindow.glWindow, &xpos, &ypos);
-	//selectMesh(xpos, ypos);
+	selectMesh(xpos, ypos);
       }	    
     }
   clearInputBuffer();
@@ -364,7 +434,7 @@ void physicsUpdate()
 int initEngine()
 {
   //Open window
-  openWindow(400,600);
+  openWindow(720,1080);
   
   //Init input and renderer
   initInput();
@@ -373,7 +443,6 @@ int initEngine()
   //Init font
   //mainFont = initFont("res/fonts/TIMES.ttf",80);
   mainFont = initFontMSDF("res/fonts/TIMES.bmp", "res/fonts/TIMES_INFO.csv");
-
 
   //Init GPU timers
   initGLTimer(&GPUMeshTimer);
@@ -397,7 +466,7 @@ int initEngine()
   initCamera(&mainCamera,
 	     (f32)mainWindow.width, (f32)mainWindow.height,
 	     60.0f,
-	     0.001f,100.0f,
+	     0.001f,20.0f,
 	     camPos, camDir);  
   setPerspectiveMatrix(&mainCamera);
 
@@ -421,6 +490,33 @@ int initEngine()
   arrows->visible = false;
   translationArrows = arrows->id;
 
+  bobMesh = loadMD5Mesh("res/models/bob_lamp_update.md5mesh");
+  anim = loadMD5Anim("res/models/bob_lamp_update.md5anim", bobMesh);
+  bob = requestNewEntity("bob");
+  bob->position.y -= 4.0f;
+  bob->rotation.x = -3.14 / 2;
+  bob->meshes = bobMesh->meshes;
+  bob->meshCount = bobMesh->meshCount;
+  for (int i = 0; i < bobMesh->meshCount; i++)
+    {      
+      calculateNormals(bobMesh->meshes[i]);
+      addMesh(bobMesh->meshes[i], "res/shaders/basicLightVertex.glsl", "res/shaders/basicLightFrag.glsl");
+      loadMaterial("res/materials/defaultMaterial.mat", &bob->meshes[i]->material);
+    }
+  bob->scale.x = 1.0;
+  bob->scale.y = 1.0;
+  bob->scale.z = 1.0;
+  /*
+  for (int i = 0; i < anim->jointCount; i++)
+    {
+      vec4 pos = {0.0, 0.0, 0.0, 1.0};
+      pos = anim->frames[0].joints[i].world * pos;
+      Entity* dodec = deserializeEntity("res/entities/smallArrows.entity");
+      pos /= -pos.w;
+      dodec->position = pos.xyz;      
+    }
+  */
+  /*
   //TEMP: Generate cave
   vec3i dims = {16,16,16};
   float* grid = generateCaveGrid(dims);
@@ -428,8 +524,8 @@ int initEngine()
   setEntityName(cave, "Cave");
   free(grid);
   loadMaterial("res/materials/defaultMaterial.mat", &cave->meshes[0]->material);
-
-  loadScene("res/scenes/testScene.scene");
+  */
+  loadScene("res/scenes/blankScene.scene");
   
   return 0;
 }

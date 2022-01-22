@@ -2,6 +2,6 @@
 #position 0.0 0.0 0.0
 #rotation 0.0 0.0 0.0
 #angularVelocity 1.0 0.0 0.0
-#meshFile res/models/Sphere.obj
+#meshFile res/models/Sphere.stl
 #vert res/shaders/basicLightVertex.glsl
 #frag res/shaders/basicLightFrag.glsl

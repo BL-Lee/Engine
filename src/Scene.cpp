@@ -53,7 +53,6 @@ bool loadScene(const char* filename)
 	  globalRenderData.dirLights[globalRenderData.dirLightCount].specularColour
 	    = loadVec3Line("#dirLightSpecular", buffer);
 	}
-      
       else if (strstr(buffer, "#newPointLight"))
 	{
 	  globalRenderData.pointLightCount++;

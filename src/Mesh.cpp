@@ -298,6 +298,21 @@ Mesh** deserializeMeshes(const char* fileInput, u32* meshCount)
   return meshes;
 }
 
+void calculateNormals(Mesh* mesh)
+{
+  for (int i = 0; i < mesh->rendererData.indexCount; i += 3)
+    {
+      vec3 normal = Cross(mesh->vertices[mesh->indices[i + 2]].pos - mesh->vertices[mesh->indices[i + 1]].pos,
+			  mesh->vertices[mesh->indices[i + 1]].pos - mesh->vertices[mesh->indices[i + 0]].pos);
+      mesh->vertices[mesh->indices[i + 0]].normal += normal;
+      mesh->vertices[mesh->indices[i + 1]].normal += normal;
+      mesh->vertices[mesh->indices[i + 2]].normal += normal;
+    }
+  for (int i = 0; i < mesh->vertexCount; i += 3)
+      {
+	mesh->vertices[i].normal = Normalize(mesh->vertices[i].normal);
+      }
+}
 
 Mesh** loadModel(const char* modelFile, u32* meshCount)
 {

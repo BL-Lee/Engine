@@ -1,6 +1,17 @@
 #include "Shader.h"
 #include "Camera.h"
 
+
+/* TODO
+
+   Consider having one big buffer that it copies data into, 
+that way the binding wouldnt have to switch as much? idk,
+Also that way it would just be 1 draw call for shadow maps.
+Look into this
+
+ --Update: probably one bigger one for static meshes, and keep track
+ of where they are in the buffer, and small ones for dhnamic meshes
+ */
 static Camera mainCamera;
 
 struct PointLight
@@ -19,13 +30,16 @@ struct DirectionalLight
   vec3 direction;
   vec3 ambientColour;
   vec3 diffuseColour;
-  vec3 specularColour;  
+  vec3 specularColour;
+  mat4 shadowMatrix;
 };
 
 #define RENDERER_MAX_QUADS 10000
 #define RENDERER_MAX_VERTICES (RENDERER_MAX_QUADS * 4)
 #define RENDERER_MAX_INDICES (RENDERER_MAX_QUADS * 6)
 #define RENDERER_BUFFER_COUNT 2
+
+#define RENDERER_MESH_DRAW_COUNT 128
 
 #define RENDERER_UI_MODE 0
 #define RENDERER_TEXTURE_MODE 1
@@ -104,7 +118,6 @@ struct RendererData
   u32 frameBufferShader;
   u32 frameBufferQuadVAO;
   u32 frameBufferVB;
-  u32 frameBufferIB;
 
   s32 frameBufferWidth;
   s32 frameBufferHeight;
@@ -115,6 +128,22 @@ struct RendererData
   vec4 averageColour;
   f32 luminanceTemporal;
   f32 exposureChangeRate;
+
+  u32 shadowMap;
+  u32 shadowMapTexture;
+  u32 shadowMapShader;
+  
+  s32 shadowMapWidth; //currently uses frame buffer VAO and VB
+  s32 shadowMapHeight;
+
+  u32 depthShader;
+
+  u32 blueNoiseTex;
+
+  Mesh* meshesToDraw[RENDERER_MESH_DRAW_COUNT];
+  vec3 meshTransforms[RENDERER_MESH_DRAW_COUNT * 3];
+  mat4 meshModelMatrices[RENDERER_MESH_DRAW_COUNT];
+  u32 meshesToDrawCount;
 };
 
 static RendererData globalRenderData;
@@ -202,6 +231,172 @@ u32 loadAndValidateShaderPair(const char* vert, const char* frag)
   validateShaderLink(program);
 
   return program;
+}
+//Generates a texture width x and height y and returns the openGL key
+u32 genTexture(void* data, u32 x, u32 y, u32 channelType, GLenum wrapType, GLenum filterType)
+{
+  u32 textureKey;
+  //Gen texture  
+  glGenTextures(1, &textureKey);
+  glBindTexture(GL_TEXTURE_2D, textureKey);
+  errCheck()  
+  glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, filterType);
+  glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, filterType);
+  glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, wrapType);
+  glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, wrapType);
+  errCheck();
+  
+  //set texture data
+  // texture_data is the source data of your texture, in this case
+  // its size is sizeof(unsigned char) * texture_width * texture_height * 4
+  glTexImage2D(GL_TEXTURE_2D, 0, channelType, x, y, 0, channelType, GL_UNSIGNED_BYTE, data);
+  errCheck();
+  return textureKey;
+}
+//Generates a texture width x and height y and returns the openGL key
+u32 genTexture(void* data, u32 x, u32 y, u32 channelType)
+{
+  return genTexture(data, x, y, channelType, GL_CLAMP_TO_BORDER, GL_LINEAR);
+}
+
+//Loads a texture from a file. Places the opengl Key in textureKey and returns the texture data
+u8* loadTexture(u32* textureKey, const char* textureFile, GLenum wrapType, GLenum filterType)
+{
+  //load image
+  int x, y, n;
+  u8* data = stbi_load(textureFile, &x, &y, &n, 0);
+
+  if (!data)
+    {
+      char texPath[512] = "textures/";
+      strcpy(texPath + 9, textureFile);
+      u8* data = stbi_load(texPath, &x, &y, &n, 0);
+      if (!data)
+	{
+	  printf("WARNING: FAILED TO LOAD TEXTURE:%s\n", textureFile);
+	  printf("STBI ERROR: %s\n",stbi_failure_reason());
+	  //Assert(0);
+	  return NULL;
+	}
+    }
+  GLenum channelType;
+  switch (n)
+    {
+    case 1:
+      channelType = GL_RED;
+      break;
+    case 2:
+      channelType = GL_RG;
+      break;
+    case 3:
+      channelType = GL_RGB;
+      break;
+    case 4:
+      channelType = GL_RGBA;
+      break;
+    default:
+      assert(0);
+      break;
+    }
+  *textureKey = genTexture(data, x, y, channelType, wrapType, filterType);
+  return data;  
+}
+u8* loadTexture(u32* textureKey, const char* textureFile)
+{
+  return loadTexture(textureKey, textureFile, GL_CLAMP_TO_BORDER, GL_LINEAR);
+}
+
+//requesst a key to be put in the renderer's texture buffer pool. returns the opengl Key
+u32 requestTextureKey(const char* textureName)
+{  
+  Assert(globalRenderData.textureCount < 64);
+  Assert(globalRenderData.initialized);
+  //printf("Requesting texture: %s... ", textureName);
+  for (int i = 0; i < globalRenderData.textureBufferSize; i++)
+    {
+      if (globalRenderData.totalUsingTexture[i] &&
+	  strcmp(textureName, globalRenderData.textureNames[i]) == 0)
+	{
+	  //printf("Exists! Total using this texture = %d\n", globalRenderData.totalUsingTexture[i] + 1);
+	  globalRenderData.totalUsingTexture[i]++;
+	  return globalRenderData.textureKeys[i];
+	}
+    }
+  //printf("Placing in map.\n");
+  u32 key;
+  u8* data = loadTexture(&key, textureName);
+  if (data)
+    {
+      globalRenderData.textureNames[globalRenderData.textureCount] = (char*)malloc(strlen(textureName) + 1);
+      strcpy(globalRenderData.textureNames[globalRenderData.textureCount], textureName);
+      
+      globalRenderData.textureKeys[globalRenderData.textureCount] = key;
+      globalRenderData.totalUsingTexture[globalRenderData.textureCount]++;
+      
+      globalRenderData.textureCount++;
+      stbi_image_free(data);
+      return key;
+    }
+  else
+    {
+      return (u32)-1;
+    }
+}
+
+//Requests a texture key from a raw image width x and height y.
+u32 requestTextureKey(const char* textureName, void* data, u32 x, u32 y, u32 channelType)
+{  
+  Assert(globalRenderData.textureCount < 64);
+  Assert(globalRenderData.initialized);
+  for (int i = 0; i < globalRenderData.textureBufferSize; i++)
+    {
+      if (globalRenderData.totalUsingTexture[i] &&
+	  strcmp(textureName, globalRenderData.textureNames[i]) == 0)
+	{
+	  globalRenderData.totalUsingTexture[i]++;
+	  return globalRenderData.textureKeys[i];
+	}
+    }
+
+  if (data)
+    {
+      u32 key = genTexture(data, x, y, channelType);
+      globalRenderData.textureNames[globalRenderData.textureCount] = (char*)malloc(strlen(textureName) + 1);
+      strcpy(globalRenderData.textureNames[globalRenderData.textureCount], textureName);
+      
+      globalRenderData.textureKeys[globalRenderData.textureCount] = key;
+      globalRenderData.totalUsingTexture[globalRenderData.textureCount]++;
+      
+      globalRenderData.textureCount++;
+
+      return key;
+
+    }
+  else
+    {
+      return (u32)-1;
+    }
+}
+
+//Removes a texture from the pool. If no other entities are using this texture then the texture's memory is freed
+void deleteTexture(const char* textureName)
+{
+  for (int i = 0; i < globalRenderData.textureBufferSize; i++)
+    {
+      if (globalRenderData.totalUsingTexture[i] && strcmp(textureName, globalRenderData.textureNames[i]) == 0)
+	{
+	  //Decrement the # things using this texture
+	  globalRenderData.totalUsingTexture[i]--;
+	  if (globalRenderData.totalUsingTexture[i] == 0)
+	    {
+	      //If nothing else using it then delete it
+	      glDeleteTextures(1, &globalRenderData.textureKeys[i]);
+	      free(globalRenderData.textureNames[i]);
+	      return;
+	    }
+	  return;
+	}
+    }
 }
 
 /* 
@@ -328,22 +523,16 @@ void initRenderer()
   globalRenderData.wireFrameMode = 0;
   globalRenderData.initialized = 1;
 
-  globalRenderData.exposure = 1.0f;
-  globalRenderData.enabledScreenShader = 4;;
+  globalRenderData.meshesToDrawCount = 0;
+
+  globalRenderData.exposure = 0.2f;
+  globalRenderData.enabledScreenShader = 0;
+  setFrameBufferShader(0);
   globalRenderData.luminanceTemporal = 1.0f;
   globalRenderData.exposureChangeRate = 1.0f;
 
-  //TEMP: light initialization. Will be in scene file later
   globalRenderData.dirLightCount = -1;
   globalRenderData.pointLightCount = -1;
-
-  for (int i = 0; i < RENDERER_POINT_LIGHT_COUNT; i++)
-    {
-      globalRenderData.pointLights[i].specularColour.x = 1.0f;
-      globalRenderData.pointLights[i].specularColour.y = 1.0f;
-      globalRenderData.pointLights[i].specularColour.z = 1.0f;
-      //  globalRenderData.pointLights[i].ambientColour = globalRenderData.pointLights[i].diffuseColour * 0.3;      
-    }
 
   //Dynamic geometry buffers for ui and stuff
   for (int i = 0; i < RENDERER_BUFFER_COUNT; i++)
@@ -410,7 +599,41 @@ void initRenderer()
   setRendererShaderMode(0);
 
   initializeFrameBuffer();
+        glGenerateMipmap(GL_TEXTURE_2D);
+  // //Initialize shadow map // //
+  globalRenderData.shadowMapWidth = 1024;
+  globalRenderData.shadowMapHeight = 1024;
 
+  //gen frame buffer
+  glGenFramebuffers(1, &globalRenderData.shadowMap);
+  glBindFramebuffer(GL_FRAMEBUFFER, globalRenderData.shadowMap);
+  
+  //generate texture
+  glGenTextures(1, &globalRenderData.shadowMapTexture);
+  glBindTexture(GL_TEXTURE_2D, globalRenderData.shadowMapTexture);
+  glTexImage2D(GL_TEXTURE_2D, 0, GL_DEPTH_COMPONENT,
+	       globalRenderData.shadowMapWidth, globalRenderData.shadowMapHeight,
+	       0, GL_DEPTH_COMPONENT, GL_FLOAT, NULL);
+  glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+  glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
+  glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_REPEAT);
+  glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_REPEAT);
+
+  glFramebufferTexture2D(GL_FRAMEBUFFER, GL_DEPTH_ATTACHMENT, GL_TEXTURE_2D, globalRenderData.shadowMapTexture, 0);
+  glDrawBuffer(GL_NONE);
+  glReadBuffer(GL_NONE);
+
+
+  globalRenderData.shadowMapShader = loadAndValidateShaderPair("res/shaders/shadowMapVert.glsl",
+							       "res/shaders/shadowMapFrag.glsl");
+  
+  globalRenderData.depthShader = loadAndValidateShaderPair("res/shaders/screenShadervert.glsl",
+							   "res/shaders/depthFrag.glsl");
+
+  u8* data = loadTexture(&globalRenderData.blueNoiseTex, "res/textures/LDR_RGB1_0.png", GL_REPEAT, GL_NEAREST);
+  errCheck();
+  free(data);
+  
   errCheck();
 }
 
@@ -440,163 +663,6 @@ void deleteRenderer()
   free(globalRenderData.indexBufferBase);  
 }
 
-//Generates a texture width x and height y and returns the openGL key
-u32 genTexture(void* data, u32 x, u32 y, u32 channelType)
-{
-  u32 textureKey;
-  //Gen texture  
-  glGenTextures(1, &textureKey);
-  glBindTexture(GL_TEXTURE_2D, textureKey);
-  errCheck()  
-  glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
-  glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
-  glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_BORDER);
-  glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_BORDER);
-  errCheck();
-  
-  //set texture data
-  // texture_data is the source data of your texture, in this case
-  // its size is sizeof(unsigned char) * texture_width * texture_height * 4
-  glTexImage2D(GL_TEXTURE_2D, 0, channelType, x, y, 0, channelType, GL_UNSIGNED_BYTE, data);
-  errCheck();
-  return textureKey;
-}
-
-//Loads a texture from a file. Places the opengl Key in textureKey and returns the texture data
-u8* loadTexture(u32* textureKey, const char* textureFile)
-{
-  //load image
-  int x, y, n;
-  u8* data = stbi_load(textureFile, &x, &y, &n, 0);
-
-  if (!data)
-    {
-      char texPath[512] = "textures/";
-      strcpy(texPath + 9, textureFile);
-      u8* data = stbi_load(texPath, &x, &y, &n, 0);
-      if (!data)
-	{
-	  printf("WARNING: FAILED TO LOAD TEXTURE:%s\n", textureFile);
-	  printf("STBI ERROR: %s\n",stbi_failure_reason());
-	  //Assert(0);
-	  return NULL;
-	}
-    }
-  GLenum channelType;
-  switch (n)
-    {
-    case 1:
-      channelType = GL_RED;
-      break;
-    case 2:
-      channelType = GL_RG;
-      break;
-    case 3:
-      channelType = GL_RGB;
-      break;
-    case 4:
-      channelType = GL_RGBA;
-      break;
-    default:
-      assert(0);
-      break;
-    }
-  *textureKey = genTexture(data, x, y, channelType);
-  return data;  
-}
-
-//requesst a key to be put in the renderer's texture buffer pool. returns the opengl Key
-u32 requestTextureKey(const char* textureName)
-{  
-  Assert(globalRenderData.textureCount < 64);
-  Assert(globalRenderData.initialized);
-  //printf("Requesting texture: %s... ", textureName);
-  for (int i = 0; i < globalRenderData.textureBufferSize; i++)
-    {
-      if (globalRenderData.totalUsingTexture[i] &&
-	  strcmp(textureName, globalRenderData.textureNames[i]) == 0)
-	{
-	  //printf("Exists! Total using this texture = %d\n", globalRenderData.totalUsingTexture[i] + 1);
-	  globalRenderData.totalUsingTexture[i]++;
-	  return globalRenderData.textureKeys[i];
-	}
-    }
-  //printf("Placing in map.\n");
-  u32 key;
-  u8* data = loadTexture(&key, textureName);
-  if (data)
-    {
-      globalRenderData.textureNames[globalRenderData.textureCount] = (char*)malloc(strlen(textureName) + 1);
-      strcpy(globalRenderData.textureNames[globalRenderData.textureCount], textureName);
-      
-      globalRenderData.textureKeys[globalRenderData.textureCount] = key;
-      globalRenderData.totalUsingTexture[globalRenderData.textureCount]++;
-      
-      globalRenderData.textureCount++;
-      stbi_image_free(data);
-      return key;
-    }
-  else
-    {
-      return (u32)-1;
-    }
-}
-
-//Requests a texture key from a raw image width x and height y.
-u32 requestTextureKey(const char* textureName, void* data, u32 x, u32 y, u32 channelType)
-{  
-  Assert(globalRenderData.textureCount < 64);
-  Assert(globalRenderData.initialized);
-  for (int i = 0; i < globalRenderData.textureBufferSize; i++)
-    {
-      if (globalRenderData.totalUsingTexture[i] &&
-	  strcmp(textureName, globalRenderData.textureNames[i]) == 0)
-	{
-	  globalRenderData.totalUsingTexture[i]++;
-	  return globalRenderData.textureKeys[i];
-	}
-    }
-
-  if (data)
-    {
-      u32 key = genTexture(data, x, y, channelType);
-      globalRenderData.textureNames[globalRenderData.textureCount] = (char*)malloc(strlen(textureName) + 1);
-      strcpy(globalRenderData.textureNames[globalRenderData.textureCount], textureName);
-      
-      globalRenderData.textureKeys[globalRenderData.textureCount] = key;
-      globalRenderData.totalUsingTexture[globalRenderData.textureCount]++;
-      
-      globalRenderData.textureCount++;
-
-      return key;
-
-    }
-  else
-    {
-      return (u32)-1;
-    }
-}
-
-//Removes a texture from the pool. If no other entities are using this texture then the texture's memory is freed
-void deleteTexture(const char* textureName)
-{
-  for (int i = 0; i < globalRenderData.textureBufferSize; i++)
-    {
-      if (globalRenderData.totalUsingTexture[i] && strcmp(textureName, globalRenderData.textureNames[i]) == 0)
-	{
-	  //Decrement the # things using this texture
-	  globalRenderData.totalUsingTexture[i]--;
-	  if (globalRenderData.totalUsingTexture[i] == 0)
-	    {
-	      //If nothing else using it then delete it
-	      glDeleteTextures(1, &globalRenderData.textureKeys[i]);
-	      free(globalRenderData.textureNames[i]);
-	      return;
-	    }
-	  return;
-	}
-    }
-}
 
 void addMesh(Mesh* mesh, const char* vertexShader, const char* fragmentShader)
 {
@@ -724,7 +790,7 @@ void setLightUniform(s32 program)
       char uniformBuffer[64];
       for (int i = 0; i < RENDERER_DIRECTIONAL_LIGHT_COUNT; i++)
 	{
-	  globalRenderData.dirLights[i].direction = NormalizeVec3(globalRenderData.dirLights[i].direction);
+	  vec3 dir = NormalizeVec3(globalRenderData.dirLights[i].direction);
 	  sprintf(uniformBuffer, "dirLights[%d].ambientColour", i);
 	  setVec3Uniform(program, uniformBuffer, globalRenderData.dirLights[i].ambientColour);
 	  sprintf(uniformBuffer, "dirLights[%d].diffuseColour", i);	  
@@ -732,7 +798,7 @@ void setLightUniform(s32 program)
 	  sprintf(uniformBuffer, "dirLights[%d].specularColour", i);
 	  setVec3Uniform(program, uniformBuffer, globalRenderData.dirLights[i].specularColour);
 	  sprintf(uniformBuffer, "dirLights[%d].direction", i);
-	  setVec3Uniform(program, uniformBuffer, globalRenderData.dirLights[i].direction);
+	  setVec3Uniform(program, uniformBuffer, dir);
 	}
       errCheck();
     }
@@ -754,6 +820,13 @@ void setMaterialUniform(s32 program, Material* mat)
 
 void drawMesh(Mesh* mesh, vec3 position, vec3 rotation, vec3 scale)
 {
+
+  globalRenderData.meshesToDraw[globalRenderData.meshesToDrawCount] = mesh;
+  globalRenderData.meshTransforms[globalRenderData.meshesToDrawCount * 3 + 0] = position;
+  globalRenderData.meshTransforms[globalRenderData.meshesToDrawCount * 3 + 1] = rotation;
+  globalRenderData.meshTransforms[globalRenderData.meshesToDrawCount * 3 + 2] = scale;
+  globalRenderData.meshesToDrawCount++;
+  /*
   //Set view mode
   if (globalRenderData.wireFrameMode)
     {
@@ -840,6 +913,9 @@ void drawMesh(Mesh* mesh, vec3 position, vec3 rotation, vec3 scale)
   setLightUniform(mesh->rendererData.shaderProgramKey);
   setMaterialUniform(mesh->rendererData.shaderProgramKey, &mesh->material);
   glDrawElements(GL_TRIANGLES, mesh->rendererData.indexCount, GL_UNSIGNED_INT, NULL);
+
+  //shadow map
+  */
 }
 
 void rendererBeginScene()
@@ -887,8 +963,8 @@ void rendererEndScene()
 	}
 
       glBindAttribLocation(globalRenderData.shaderProgramKey,4, "tex");
-      s32 location = 4;//glGetUniformLocation(globalRenderData.shaderProgramKey, "tex");
-      if (location)
+      s32 location = glGetUniformLocation(globalRenderData.shaderProgramKey, "tex");
+      //if (location)
 	glUniform1iv(location, *globalRenderData.texturesToBindCount, values);
 
       
@@ -909,9 +985,9 @@ void addScreenSpaceTriangle(Vertex* v0, Vertex* v1, Vertex* v2)
       rendererEndScene();
       rendererBeginScene();
     }
-  v0->texUnit = 1.0f;
-  v1->texUnit = 1.0f;
-  v2->texUnit = 1.0f;
+  v0->texUnit = 0.0f;
+  v1->texUnit = 0.0f;
+  v2->texUnit = 0.0f;
   *(globalRenderData.vertexBufferPtr  + 0) = *v0;
   *(globalRenderData.vertexBufferPtr  + 1) = *v1;
   *(globalRenderData.vertexBufferPtr  + 2) = *v2;
@@ -1036,9 +1112,246 @@ void addWorldSpaceTriangle(Vertex* v0, Vertex* v1, Vertex* v2)
   v2->pos = c.xyz;
   addScreenSpaceTriangle(v0,v1,v2);
 }
+
+//TODO: Calculate tight fit of directional light's orthographic matrix based on what can be seen by the main camera
+void calculateDirLightPositions()
+{
+  vec4 corners[8];//world space
+  //NBL, NBR, NTL, NTR, FBL, FBR, FTL, FTR,
+  mat4 m = mainCamera.projectionMatrix * mainCamera.viewMatrix;
+  mat4 matrix;
+  bool result = gluInvertMatrix((float*)&m, (float*)&matrix);
+  Assert(result);
+
+  vec4 v0 = {-1, -1, -1, 1};
+  vec4 offsets[8] =
+    {
+      {-1, -1, -1, 1},
+      { 1, -1, -1, 1},
+      {-1,  1, -1, 1},
+      { 1,  1, -1, 1},
+
+      {-1, -1,  1, 1},
+      { 1, -1,  1, 1},
+      {-1,  1,  1, 1},
+      { 1,  1,  1, 1}
+    };
+  vec3 avgPos = {0.0, 0.0, 0.0};
+  for (int i = 0; i < 8; i++)
+    {
+
+      corners[i] = matrix * offsets[i];
+      corners[i].x /= corners[i].w;
+      corners[i].y /= corners[i].w;
+      corners[i].z /= corners[i].w;
+      corners[i].w = 1.0;
+      avgPos += corners[i].xyz;
+    }
+  avgPos /= 8;
+
+  DirectionalLight* d = globalRenderData.dirLights + 0;
+  vec3 lightPos = avgPos - d->direction;
+  vec3 xAxis = {1.0, 0.0, 0.0};
+  vec3 yAxis = {0.0, 1.0, 0.0};
+  vec3 zAxis = {0.0, 0.0, 1.0};
+  mat4 lightMatrix = Translate(-lightPos) * Rotate(d->direction.x, xAxis) * Rotate(d->direction.y, yAxis)* Rotate(d->direction.z, zAxis);
+  vec4 lightViewCoords[8];
+  
+  vec3 max = { -FLT_MAX, -FLT_MAX, -FLT_MAX };
+  vec3 min = {  FLT_MAX,  FLT_MAX,  FLT_MAX };
+
+  for (int i = 0; i < 8; i++)
+    {
+      lightViewCoords[i] = lightMatrix * corners[i];//light space
+      for (int coords = 0; coords < 3; coords++)
+	{
+	  if (lightViewCoords[i][coords] > max[coords])
+	    {
+	      max[coords] = lightViewCoords[i][coords];
+	    }
+	  if (lightViewCoords[i][coords] < min[coords])
+	    {
+	      min[coords] = lightViewCoords[i][coords];
+	    }
+	}
+    }
+  d->shadowMatrix = Orthographic(min.x, max.x, min.y, max.y, 0.1, 30);      
+}
+
+void flushMeshesAndRender()
+{
+  //Set view mode
+  if (globalRenderData.wireFrameMode)
+    {
+      glPolygonMode(GL_FRONT_AND_BACK, GL_LINE);
+    }
+  else
+    {
+      glPolygonMode(GL_FRONT_AND_BACK, GL_FILL);
+    }
+  for (int i = 0; i < globalRenderData.meshesToDrawCount; i++)
+    {
+      Mesh* mesh = globalRenderData.meshesToDraw[i];
+      vec3 position = globalRenderData.meshTransforms[i * 3 + 0];
+      vec3 rotation = globalRenderData.meshTransforms[i * 3 + 1];
+      vec3 scale = globalRenderData.meshTransforms[i * 3 + 2];
+
+      mat4 modelMatrix = 
+	{
+	  scale.x,    0.0,              0.0,              0.0,
+	  0.0,              scale.y,    0.0,              0.0,
+	  0.0,              0.0,              scale.z,    0.0,
+	  position.x, position.y, position.z, 1.0
+	};
+      f32 a = rotation.x;
+      f32 b = rotation.y;
+      f32 c = rotation.z;
+      mat4 rotationXMatrix =
+	{
+	  1, 0, 0, 0,
+	  0, cos(-a), -sin(-a), 0,
+	  0, sin(-a), cos(-a), 0,
+	  0, 0, 0, 1
+	};
+      mat4 rotationYMatrix =
+	{
+	  cos(-b), 0, sin(-b), 0,
+	  0, 1, 0, 0,
+	  -sin(-b), 0, cos(-b), 0,
+	  0, 0, 0, 1
+	};
+      mat4 rotationZMatrix =
+	{
+	  cos(-c), -sin(-c), 0, 0,
+	  sin(-c), cos(-c), 0, 0,
+	  0, 0, 1, 0,
+	  0, 0, 0, 1
+	};
+      mat4 rotationMatrix = rotationXMatrix * rotationYMatrix * rotationZMatrix;
+   
+      modelMatrix = modelMatrix  * rotationMatrix;
+      globalRenderData.meshModelMatrices[i] = modelMatrix;
+    }
+  
+  //shadow map
+  glBindFramebuffer(GL_FRAMEBUFFER, globalRenderData.shadowMap);
+  glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+  vec3 lightPos = globalRenderData.dirLights[0].direction;
+  mat4 lightProjection = Orthographic(
+				      -8.0f, 8.0f,
+				      -8.0f, 8.0f,
+				      0.1, 20.0f
+				      );
+  //lightProjection = globalRenderData.dirLights[0].shadowMatrix;
+  vec3 target = {0.0,0.0,0.0};
+  vec3 up = {0.0,1.0,0.0};
+  mat4 lightMatrix = lightProjection * LookAt(lightPos, target, up);
+  glViewport(0,0,globalRenderData.shadowMapWidth, globalRenderData.shadowMapHeight);
+  glCullFace(GL_FRONT);
+  for (int i = 0; i < globalRenderData.meshesToDrawCount; i++)
+    {
+      Mesh* mesh = globalRenderData.meshesToDraw[i];
+
+      glBindVertexArray(mesh->rendererData.vertexArrayKey);
+      glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, mesh->rendererData.indexBufferKey);
+      glUseProgram(globalRenderData.shadowMapShader);
+
+      //assumes orthographic
+      s32 location = glGetUniformLocation(globalRenderData.shadowMapShader, "mMatrix");
+      glUniformMatrix4fv(location, 1, GL_FALSE, (float*)&globalRenderData.meshModelMatrices[i]);
+
+      //mat4 lightMatrix = mainCamera.projectionMatrix * mainCamera.viewMatrix;
+      location = glGetUniformLocation(globalRenderData.shadowMapShader, "lightMatrix");
+      glUniformMatrix4fv(location, 1, GL_FALSE, (float*)&lightMatrix);
+
+      glDrawElements(GL_TRIANGLES, mesh->rendererData.indexCount, GL_UNSIGNED_INT, NULL);
+      errCheck();
+    }
+  glCullFace(GL_BACK);
+  glViewport(0,0,globalRenderData.frameBufferWidth, globalRenderData.frameBufferHeight);
+
+  glBindFramebuffer(GL_FRAMEBUFFER, globalRenderData.frontBuffer);  
+  
+
+  for (int i = 0; i < globalRenderData.meshesToDrawCount; i++)
+    {
+      Mesh* mesh = globalRenderData.meshesToDraw[i];
+      vec3 position = globalRenderData.meshTransforms[i * 3 + 0];
+      vec3 rotation = globalRenderData.meshTransforms[i * 3 + 1];
+      vec3 scale = globalRenderData.meshTransforms[i * 3 + 2];
+      //Bind this mesh's arrays
+      glBindVertexArray(mesh->rendererData.vertexArrayKey);
+      glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, mesh->rendererData.indexBufferKey);
+      glUseProgram(mesh->rendererData.shaderProgramKey);
+
+      //Generate transformation matrix
+      mat4 viewMatrix = mainCamera.viewMatrix;//Translate(-mainCamera.pos) ;
+      //Send matrix
+      
+      s32 location = glGetUniformLocation(mesh->rendererData.shaderProgramKey, "mvpMatrix");
+      if (location == -1)
+	{
+	  location = glGetUniformLocation(mesh->rendererData.shaderProgramKey, "vpMatrix");
+	  Assert(location != -1);
+	  mat4 vpMatrix = mainCamera.projectionMatrix * viewMatrix;
+	  glUniformMatrix4fv(location, 1, GL_FALSE, (float*)&vpMatrix);
+
+	  location = glGetUniformLocation(mesh->rendererData.shaderProgramKey, "mMatrix");
+	  Assert(location != -1);
+	  glUniformMatrix4fv(location, 1, GL_FALSE, (float*)&globalRenderData.meshModelMatrices[i]);	
+	}
+      else
+	{
+	  mat4 mvp =  mainCamera.projectionMatrix * viewMatrix * globalRenderData.meshModelMatrices[i];
+	  glUniformMatrix4fv(location, 1, GL_FALSE, (float*)&mvp);
+	}
+ 
+      location = glGetUniformLocation(mesh->rendererData.shaderProgramKey, "normalMatrix");
+      if (location != -1)
+	{
+	  mat4 normalMatrix;
+	  gluInvertMatrix((float*)&globalRenderData.meshModelMatrices[i], (float*)&normalMatrix);
+	  normalMatrix = Transpose(normalMatrix);
+	  glUniformMatrix4fv(location, 1, GL_FALSE, (float*)&normalMatrix);
+	}
+      
+      location = glGetUniformLocation(mesh->rendererData.shaderProgramKey, "lightSpaceMatrix");
+      // if (location != -1)
+	{
+	  glUniformMatrix4fv(location, 1, GL_FALSE, (float*)&lightMatrix);
+	}
+      location = glGetUniformLocation(mesh->rendererData.shaderProgramKey, "blueNoise");
+      if (location != -1)
+	{
+	  glUniform1i(location, 1);
+	}
+      
+
+      vec3 cameraPos = getCameraPos(&mainCamera);
+      setVec3Uniform(mesh->rendererData.shaderProgramKey, "ViewPos", cameraPos);
+
+      setLightUniform(mesh->rendererData.shaderProgramKey);
+      setMaterialUniform(mesh->rendererData.shaderProgramKey, &mesh->material);
+      glActiveTexture(GL_TEXTURE0);
+      glBindTexture(GL_TEXTURE_2D, globalRenderData.shadowMapTexture);
+      glActiveTexture(GL_TEXTURE1);
+      glBindTexture(GL_TEXTURE_2D, globalRenderData.blueNoiseTex);
+      glActiveTexture(GL_TEXTURE0);
+      glDrawElements(GL_TRIANGLES, mesh->rendererData.indexCount, GL_UNSIGNED_INT, NULL);
+      errCheck();
+    }
+  globalRenderData.meshesToDrawCount = 0;
+}
+
 void swapToFrameBufferAndDraw()
 {
 
+  //TODO: FIX this function and optimize it
+  //calculateDirLightPositions();
+  
+  flushMeshesAndRender();
+
+  
   errCheck();
   //Dont draw wireframes on the fullscreen quad
   glPolygonMode(GL_FRONT_AND_BACK, GL_FILL);
@@ -1048,11 +1361,10 @@ void swapToFrameBufferAndDraw()
   glUseProgram(globalRenderData.frameBufferShader);
   glBindVertexArray(globalRenderData.frameBufferQuadVAO);
 
-  glDisable(GL_DEPTH_TEST);
-
   glBindTexture(GL_TEXTURE_2D, globalRenderData.frontBufferTexture);
   //If we have autoexposure enabled, we need average luminance which is found by
   //getting 1x1 mip map
+
   if (globalRenderData.enabledScreenShader == 4)
     {
       //Get mip map pixel
@@ -1069,6 +1381,7 @@ void swapToFrameBufferAndDraw()
       globalRenderData.exposure = Clamp(0.2, 0.1 / luminanceTemporal, 10.0);
     }
   setFloatUniform(globalRenderData.frameBufferShader, "exposure", globalRenderData.exposure);
+
   glDrawArrays(GL_TRIANGLES, 0, 6); //Draw
 
   //Reset to wireframes if it was enabled
@@ -1094,12 +1407,12 @@ void swapToFrameBufferAndDraw()
   GPUTotalTime = meshTime + UITime + ImGuiTime;
 
   
-  glClear(GL_COLOR_BUFFER_BIT);
+  glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
   //Switch back to frameBuffer
   glBindFramebuffer(GL_FRAMEBUFFER, globalRenderData.frontBuffer);
-
   glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT); // we're not using the stencil buffer now
-  glEnable(GL_DEPTH_TEST);
+
+   glEnable(GL_DEPTH_TEST);
   errCheck();
 }
 
