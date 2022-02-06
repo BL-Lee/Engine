@@ -71,13 +71,8 @@ void drawDebugConsole()
   ImGui::NewFrame();
   ImGui::Begin("Editor");
 
-  if(ImGui::Button("Update frame"))
-    {
-      bobFrame++;
-      printf("bobframe: %d\n", bobFrame);
-      updateVertexPositionsManually(bobMesh, bobFrame);
-    }
-  
+  ImGui::Text("Frame: %d, %.2f%%", anim->currentFrames[0], anim->currentInterps[0]);
+      ImGui::Text("Frame: %d, %.2f%%", anim->currentFrames[1], anim->currentInterps[1]);
   //Timing data
   if (ImGui::CollapsingHeader("TimingData"))
     {

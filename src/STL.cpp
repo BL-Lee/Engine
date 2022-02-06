@@ -22,9 +22,9 @@ Mesh** loadSTLShape(const char* fileName, vec3 offset, u32* count)
   fread((void*)&triangleCount, sizeof(u32), 1, fileHandle);
 
   Mesh* mesh = (Mesh*)calloc(sizeof(Mesh), 1);
-  mesh->vertices = (Vertex*)malloc(sizeof(Vertex) * triangleCount * 3);
+  mesh->vertices = malloc(sizeof(Vertex) * triangleCount * 3);
 
-  Vertex* vertex = mesh->vertices;
+  Vertex* vertex = (Vertex*)mesh->vertices;
   for (u32 i = 0; i < triangleCount; i++)
     {
       //TODO: vertex normal

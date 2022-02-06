@@ -22,7 +22,7 @@ tri <int:triangleIndex> <int:vertIndex0> <int:vertIndex1> <int:vertIndex2>
 ...
  
 numweights <int:numWeights>
-weight <int:weightIndex> <int:jointIndex> <float:weightBias> ( <vec3:weightPosition> )
+weight <int:weightIndex> <int:jointIndex> <float:weightBias> ( <vec3:weightPosition> %)
 ...
  
 }
@@ -97,7 +97,12 @@ SkinnedMesh* loadMD5Mesh(const char* fileName)
 
   int meshIndex = 0; //mesh index
   
+  SkinnedWeight** tempWeights;
+  u32* weightCounts;
+  SkinnedVertexWeight** vertexWeights;
+  
   char buffer[512];
+  
   while (fgets(buffer, 512, fileHandle))
     {
       if (strstr(buffer, "numJoints")){
@@ -108,11 +113,12 @@ SkinnedMesh* loadMD5Mesh(const char* fileName)
       else if (strstr(buffer, "numMeshes")) {
 	sscanf(buffer,"numMeshes %d", &sm->meshCount);
 	sm->meshes = (Mesh**)malloc(sizeof(Mesh*) * sm->meshCount);
-	//TEMP
+	
+	//Temporary variables. TODO: get rid of tempPositions
 	sm->tempPositions = (vec3**)malloc(sizeof(vec3*) * sm->meshCount);
-	sm->weights = (SkinnedWeight**)malloc(sizeof(SkinnedWeight*) * sm->meshCount);
-	sm->weightCounts = (u32*)malloc(sizeof(u32) * sm->meshCount);
-	sm->vertexWeights = (SkinnedVertexWeight**)malloc(sizeof(SkinnedVertexWeight*) * sm->meshCount);
+	tempWeights = (SkinnedWeight**)malloc(sizeof(SkinnedWeight*) * sm->meshCount);
+	weightCounts = (u32*)malloc(sizeof(u32) * sm->meshCount);
+	vertexWeights = (SkinnedVertexWeight**)malloc(sizeof(SkinnedVertexWeight*) * sm->meshCount);
       }
       else if (strstr(buffer, "joints")) {
 	Assert(sm->jointCount != -1);
@@ -148,7 +154,8 @@ SkinnedMesh* loadMD5Mesh(const char* fileName)
 	Assert(sm->meshCount != -1);
 	Assert(buffer[0] != '\r');
 	  {
-	    sm->meshes[meshIndex] = (Mesh*)malloc(sizeof(Mesh));	    
+	    sm->meshes[meshIndex] = (Mesh*)calloc(1, sizeof(Mesh));
+	    sm->meshes[meshIndex]->visible = 1;
 	    Assert(fgets(buffer, 512, fileHandle));//shader line
 	    char nameBuffer[256];
 	    sscanf(buffer, "shader %s", nameBuffer);
@@ -159,10 +166,10 @@ SkinnedMesh* loadMD5Mesh(const char* fileName)
 	    Assert(fgets(buffer, 512, fileHandle));//blank line
 	    Assert(fgets(buffer, 512, fileHandle));//numverts
 	    sscanf(buffer, "\tnumverts %d", &sm->meshes[meshIndex]->vertexCount);
-	    sm->meshes[meshIndex]->vertices = (Vertex*)malloc(sizeof(Vertex) * sm->meshes[meshIndex]->vertexCount);
+	    sm->meshes[meshIndex]->vertices = calloc(sm->meshes[meshIndex]->vertexCount, sizeof(SkinnedVertex));
 	    //TEMP
-	    sm->vertexWeights[meshIndex] = (SkinnedVertexWeight*)malloc(sizeof(SkinnedVertexWeight) * sm->meshes[meshIndex]->vertexCount);
-	    	    //Vertices
+	    vertexWeights[meshIndex] = (SkinnedVertexWeight*)malloc(sizeof(SkinnedVertexWeight) * sm->meshes[meshIndex]->vertexCount);
+	    	    //SkinnedVertices
 	    for (int v = 0; v < sm->meshes[meshIndex]->vertexCount; v++)
 	      {
 		Assert(fgets(buffer, 512, fileHandle));//vertex
@@ -174,8 +181,8 @@ SkinnedMesh* loadMD5Mesh(const char* fileName)
 		       &uv.x, &uv.y,
 		       &sw.startIndex, &sw.count);
 
-		sm->meshes[meshIndex]->vertices[index].texCoord = uv;
-		sm->vertexWeights[meshIndex][index] = sw;		       
+		((SkinnedVertex*)sm->meshes[meshIndex]->vertices)[index].texCoord = uv;
+		vertexWeights[meshIndex][index] = sw;		       
 	      }
 	    
 	    Assert(fgets(buffer, 512, fileHandle));//Blank line
@@ -208,11 +215,11 @@ SkinnedMesh* loadMD5Mesh(const char* fileName)
 	    //Weights
 	    Assert(fgets(buffer, 512, fileHandle));
 	    int weightCount;
-	    sscanf(buffer, "\tnumweights %d", &sm->weightCounts[meshIndex]);
-	    sm->weights[meshIndex] = (SkinnedWeight*)malloc(sizeof(SkinnedWeight) * sm->weightCounts[meshIndex]);
-	    vec3 tempPositions[sm->weightCounts[meshIndex]];
+	    sscanf(buffer, "\tnumweights %d", &weightCounts[meshIndex]);
+	    tempWeights[meshIndex] = (SkinnedWeight*)calloc(weightCounts[meshIndex],sizeof(SkinnedWeight));
+	    vec3 tempPositions[weightCounts[meshIndex]];
 	    
-	    for (int v = 0; v < sm->weightCounts[meshIndex]; v++)
+	    for (int v = 0; v < weightCounts[meshIndex]; v++)
 	      {
 		Assert(fgets(buffer, 512, fileHandle));//vertex
 		int index;
@@ -222,63 +229,112 @@ SkinnedMesh* loadMD5Mesh(const char* fileName)
 		       &sw.jointIndex,
 		       &sw.bias,
 		       &tempPositions[v].x, &tempPositions[v].y, &tempPositions[v].z); 
-		sm->weights[meshIndex][index] = sw;
+		tempWeights[meshIndex][index] = sw;
 	      }
 
 	    sm->tempPositions[meshIndex] = (vec3*)malloc(sizeof(vec3) * sm->meshes[meshIndex]->vertexCount);
-	    /* Calculate final vertex to draw with weights */
+	
 	    for (int j = 0; j < sm->meshes[meshIndex]->vertexCount; j++)
 	      {
 		vec4 finalVertex = { 0.0, 0.0, 0.0 };
-
-		SkinnedVertexWeight svw = sm->vertexWeights[meshIndex][j];
+		
+		float remainingWeight = 0.0;
+		SkinnedVertex* vertex = &((SkinnedVertex*)sm->meshes[meshIndex]->vertices)[j];
+		SkinnedVertexWeight svw = vertexWeights[meshIndex][j];
+		SkinnedWeight weights[svw.count];
 		for (int i = 0; i < svw.count; i++)
 		  {
-		    SkinnedWeight weight = sm->weights[meshIndex][svw.startIndex + i];
+		    weights[i] = tempWeights[meshIndex][svw.startIndex + i];
+		  }
+		//TODO: sort helper function
+		for (int i = svw.count - 1; i > 0; i--)
+		  {
+		    for (int k = i; k > 0; k--)
+		      {
+			if (weights[k - 1].bias < weights[k].bias)
+			  {
+			    SkinnedWeight temp = weights[k-1];
+			    weights[k - 1] = weights[k];
+			    weights[k] = temp;
+
+			  }
+ 		      }
+		  }
+		for (int i = 0; i < svw.count; i++)
+		  {
+		    SkinnedWeight weight = weights[i];
 		    SkinnedJoint joint = sm->joints[weight.jointIndex];
+
+		    if (i < 4)
+		      {
+			vertex->jointWeights[i] = weight.bias;
+			vertex->jointIndices[i] = (float)weight.jointIndex;
+		      }
+		    else
+		      {
+			remainingWeight += weight.bias;
+		      }
 		    
 		    vec4 zero = {tempPositions[svw.startIndex + i],1.0};
 		    finalVertex += joint.transform * zero * weight.bias;
+		    
 		  }
-		sm->meshes[meshIndex]->vertices[j].pos = finalVertex.xyz;
+		for (int i = 0; i < 4; i++)
+		  {
+		    vertex->jointWeights[i] += remainingWeight * vertex->jointWeights[i];
+		  }
+		for (int i = 1; i < 4; i ++)
+		  {		    
+		    Assert(vertex->jointWeights[i] <= vertex->jointWeights[i-1]);
+		  }				
+		((SkinnedVertex*)sm->meshes[meshIndex]->vertices)[j].pos = finalVertex.xyz;
 		sm->meshes[meshIndex]->visible = 1;
 		sm->tempPositions[meshIndex][j] = finalVertex.xyz;
+		sm->meshes[meshIndex]->skinnedMesh = sm;
 	      }	  
 	    meshIndex++;
 	  }
       }
     }
-
+  for (int i = 0; i < sm->meshCount; i++)
+    {
+      free(tempWeights[i]);
+      free(vertexWeights[i]);
+    }
+  free(tempWeights);
+  free(weightCounts);
+  free(vertexWeights);
   fclose(fileHandle);
 
   return sm;
 
 }
 
-void updateVertexPositionsManually(SkinnedMesh* skinnedMesh, int frameNumber)
+
+
+//See note in Mesh.h about transform/joint storage
+void updateVertexPositionsManually(SkinnedMesh* skinnedMesh)
 {
-  SkinnedAnimationFrame* frame = &skinnedMesh->animations->frames[frameNumber];
+  SkinnedAnimation* anim = skinnedMesh->animations;
   for (int i = 0; i < skinnedMesh->meshCount; i++)
     {
       Mesh* mesh = skinnedMesh->meshes[i];
       for (int v = 0; v < mesh->vertexCount; v++)
 	{
-	  vec4 finalVertex = { 0.0, 0.0, 0.0 };
+	  SkinnedVertex* vertex = &((SkinnedVertex*)mesh->vertices)[v];
+	  vec4 finalVertex = { 0.0, 0.0, 0.0, 1.0 };
 
-	  SkinnedVertexWeight svw = skinnedMesh->vertexWeights[i][v];
-	  for (int j = 0; j < svw.count; j++)
+	  for (int j = 0; j < 4; j++)
 	    {
-	      SkinnedWeight weight = skinnedMesh->weights[i][svw.startIndex + j];
-	      SkinnedJoint joint = frame->joints[weight.jointIndex];
-
-	      vec4 zero = {skinnedMesh->tempPositions[i][v],1.0};
-	      finalVertex += joint.transform * skinnedMesh->restInverses[weight.jointIndex] * zero * weight.bias;
-	    }
-	  mesh->vertices[v].pos = finalVertex.xyz;
+	      vec4 zero = { skinnedMesh->tempPositions[i][v], 1.0 };
+	      vec4 newPos = (anim->compositeMatrices[(int)vertex->jointIndices[j]] * zero) * vertex->jointWeights[j];
+	      finalVertex += newPos;
+	      }
+	  ((SkinnedVertex*)mesh->vertices)[v].pos = finalVertex.xyz / finalVertex.w;
 	  
 	}
       glBindBuffer(GL_ARRAY_BUFFER, mesh->rendererData.vertexBufferKey);
-      glBufferData(GL_ARRAY_BUFFER, sizeof(Vertex) * mesh->vertexCount, mesh->vertices, GL_DYNAMIC_DRAW);
+      glBufferData(GL_ARRAY_BUFFER, sizeof(SkinnedVertex) * mesh->vertexCount, mesh->vertices, GL_DYNAMIC_DRAW);
     }
 }
 
@@ -292,6 +348,13 @@ SkinnedAnimation* loadMD5Anim(const char* fileName, SkinnedMesh* associatedMesh)
     }
   
   SkinnedAnimation* animation = (SkinnedAnimation*)malloc(sizeof(SkinnedAnimation));
+
+  for (int i = 0; i < 4; i++)
+    {
+      animation->currentFrames[i] = 0;
+      animation->currentInterps[i] = 0.0;
+    }
+    animation->currentInterps[0] = 1.0;
   u32* jointFlags;
   u32* startIndices;
   u32 numAnimatedComponents;
@@ -310,6 +373,7 @@ SkinnedAnimation* loadMD5Anim(const char* fileName, SkinnedMesh* associatedMesh)
 	  sscanf(buffer,"numJoints %d", &animation->jointCount);
 	  jointFlags = (u32*)malloc(sizeof(u32) * animation->jointCount);
 	  startIndices = (u32*) malloc(sizeof(u32) * animation->jointCount);
+	  animation->compositeMatrices = (mat4*)malloc(sizeof(mat4) * animation->jointCount);
 	}
       else if (strstr(buffer, "frameRate"))
 	{
@@ -440,6 +504,7 @@ SkinnedAnimation* loadMD5Anim(const char* fileName, SkinnedMesh* associatedMesh)
 	  framesAdded++;
 	}
     }
+  
   associatedMesh->animations = animation;
   free(jointFlags);
   free(startIndices);

@@ -1,6 +1,7 @@
   #include <stdio.h>
 #include <iostream>
 #include <strings.h>
+#if 0
 Mesh* loadOBJFile(const char* fileName)
 {
   FILE* fileHandle = fopen(fileName, "rb");
@@ -109,7 +110,7 @@ Mesh* loadOBJFile(const char* fileName)
   return mesh;
 
 }
-
+#endif
 Mesh** loadOBJFile_Loader(const char* filename, u32* count)
 {
   objl::Loader loader;
@@ -130,20 +131,21 @@ Mesh** loadOBJFile_Loader(const char* filename, u32* count)
       std::cout << mesh.MeshMaterial.name << std::endl;
 
       //copy vertices
-      outMesh->vertices = (Vertex*)malloc(sizeof(Vertex) * mesh.Vertices.size());
+      outMesh->vertices = (void*)malloc(sizeof(Vertex) * mesh.Vertices.size());
+      Vertex* vertices = (Vertex*)outMesh->vertices;
       outMesh->vertexCount = mesh.Vertices.size();
       for (int j = 0; j < mesh.Vertices.size(); j++)
 	{
-	  outMesh->vertices[j].pos.x = mesh.Vertices[j].Position.X;
-	  outMesh->vertices[j].pos.y = mesh.Vertices[j].Position.Y;
-	  outMesh->vertices[j].pos.z = mesh.Vertices[j].Position.Z;
+	  vertices[j].pos.x = mesh.Vertices[j].Position.X;
+	  vertices[j].pos.y = mesh.Vertices[j].Position.Y;
+	  vertices[j].pos.z = mesh.Vertices[j].Position.Z;
 
-	  outMesh->vertices[j].normal.x = mesh.Vertices[j].Normal.X;
-	  outMesh->vertices[j].normal.y = mesh.Vertices[j].Normal.Y;
-	  outMesh->vertices[j].normal.z = mesh.Vertices[j].Normal.Z;
+	  vertices[j].normal.x = mesh.Vertices[j].Normal.X;
+	  vertices[j].normal.y = mesh.Vertices[j].Normal.Y;
+	  vertices[j].normal.z = mesh.Vertices[j].Normal.Z;
 
-	  outMesh->vertices[j].texCoord.x = mesh.Vertices[j].TextureCoordinate.X;
-	  outMesh->vertices[j].texCoord.y = mesh.Vertices[j].TextureCoordinate.Y;
+	  vertices[j].texCoord.x = mesh.Vertices[j].TextureCoordinate.X;
+	  vertices[j].texCoord.y = mesh.Vertices[j].TextureCoordinate.Y;
 	}
       
 	     //copy indices

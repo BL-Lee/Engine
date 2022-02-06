@@ -48,7 +48,7 @@ float rand(float seed)
 
 void main()
 {
-  
+
 #if SHADOWS
   // perform perspective divide
   vec3 projCoords = lightSpaceCoords.xyz / lightSpaceCoords.w;

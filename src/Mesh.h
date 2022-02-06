@@ -10,6 +10,15 @@ struct Vertex
   vec2 texCoord;
   float texUnit;
 };
+struct SkinnedVertex
+{
+  vec3 pos;
+  vec3 normal;
+  vec2 texCoord;
+  float texUnit;
+  float jointIndices[4];
+  float jointWeights[4];
+};
 struct RendererMeshData
 {
   u32 vertexBufferKey;
@@ -48,12 +57,16 @@ struct Mesh
   
   bool visible;
   u32 vertexCount;
-  Vertex* vertices;
+  //Vertex* vertices;
+  void* vertices;
+
   u32* indices;
   
   RendererMeshData rendererData;
   Material material;
   Collider collider;
+
+  void* skinnedMesh;
 };
 
 
@@ -69,11 +82,36 @@ struct SkinnedJointHierarchy
 {
 };
 
+
+/*
+  
+  TODO: consider storing like this instead:
+  SkinnedJoint {
+    mat4* transforms; (1 for each frame)
+  }
+  We always are interpolating between frames, so why store like this:
+  frame 1:
+  joint 1 info
+  joint 2 info
+  joint 3 info...
+
+  instead of this?
+  joint 1 info:
+   frame 1 transform
+   frame 2 transform ...
+  joint 2 info:
+   frame 1 transform
+   frame 2 transform ...
+
+   Would probably get better cache performance this way
+
+ */
+
+
 struct SkinnedJoint
 {
   char* name;
   int parentIndex;
-  mat4 restInverse;
   mat4 transform;
   vec3 position;
   hmm_quaternion orientation;
@@ -95,6 +133,11 @@ struct SkinnedAnimation
   SkinnedAnimationFrame* frames;
   u32 jointCount;
   u32 frameRate;
+
+  u32 currentFrames[4];
+  f32 currentInterps[4];
+
+  mat4* compositeMatrices;
 };
 
 
@@ -116,12 +159,6 @@ struct SkinnedMesh
   SkinnedJoint* joints; //base frame
   u32 jointCount;
 
-  SkinnedVertexWeight** vertexWeights;
-  u32* vertexWeightCounts;
-  
-  SkinnedWeight** weights;
-  u32* weightCounts;
-  
   Mesh** meshes;
   u32 meshCount;
   //TEMP

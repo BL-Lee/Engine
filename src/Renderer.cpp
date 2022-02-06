@@ -1,6 +1,6 @@
 #include "Shader.h"
 #include "Camera.h"
-
+#include "Skinned.cpp"
 
 /* TODO
 
@@ -132,6 +132,7 @@ struct RendererData
   u32 shadowMap;
   u32 shadowMapTexture;
   u32 shadowMapShader;
+  u32 skinnedShadowMapShader;
   
   s32 shadowMapWidth; //currently uses frame buffer VAO and VB
   s32 shadowMapHeight;
@@ -145,6 +146,36 @@ struct RendererData
   mat4 meshModelMatrices[RENDERER_MESH_DRAW_COUNT];
   u32 meshesToDrawCount;
 };
+
+struct VertexLayoutComponent
+{
+  char name[64];
+  u32 size;
+  s32 location;
+  GLenum type;
+  u32 count;
+};
+
+static VertexLayoutComponent defaultLayout[4] =
+  {
+    "position", sizeof(vec3), 0, GL_FLOAT, 3, 
+    "normal", sizeof(vec3), 1, GL_FLOAT, 3, 
+    "texCoord", sizeof(vec2), 2, GL_FLOAT, 2,
+    "texUnit", sizeof(float), 3, GL_FLOAT, 1
+  };
+
+#define SKINNED_MAX_JOINT_COUNT 4
+static  VertexLayoutComponent skinnedDefaultlayout[6] =
+  {
+    "position", sizeof(vec3), 0, GL_FLOAT, 3, 
+    "normal", sizeof(vec3), 1, GL_FLOAT, 3, 
+    "texCoord", sizeof(vec2), 2, GL_FLOAT, 2,
+    "texUnit", sizeof(float), 3, GL_FLOAT, 1,
+    "jointIndices", sizeof(vec4), 4, GL_FLOAT, SKINNED_MAX_JOINT_COUNT,
+    "jointWeights", sizeof(vec4), 5, GL_FLOAT, SKINNED_MAX_JOINT_COUNT
+  };
+
+  
 
 static RendererData globalRenderData;
 
@@ -201,7 +232,7 @@ void validateShaderLink(u32 programID)
   glGetProgramiv(programID, GL_LINK_STATUS, &status);
   if (status != GL_TRUE)
     {
-      glGetShaderInfoLog( programID,
+      glGetProgramInfoLog( programID,
 			  8000,
 			  &logLength,
 			  log);
@@ -209,6 +240,7 @@ void validateShaderLink(u32 programID)
       printf("Shader log length: %d\n", logLength);
       printf("%s\n", log);
       Assert(0);
+
     }
 #endif
 }
@@ -626,6 +658,8 @@ void initRenderer()
 
   globalRenderData.shadowMapShader = loadAndValidateShaderPair("res/shaders/shadowMapVert.glsl",
 							       "res/shaders/shadowMapFrag.glsl");
+   globalRenderData.skinnedShadowMapShader = loadAndValidateShaderPair("res/shaders/skinnedShadowMapVert.glsl",
+  								      "res/shaders/shadowMapFrag.glsl");
   
   globalRenderData.depthShader = loadAndValidateShaderPair("res/shaders/screenShadervert.glsl",
 							   "res/shaders/depthFrag.glsl");
@@ -663,8 +697,8 @@ void deleteRenderer()
   free(globalRenderData.indexBufferBase);  
 }
 
-
-void addMesh(Mesh* mesh, const char* vertexShader, const char* fragmentShader)
+  
+void addMesh(Mesh* mesh, const char* vertexShader, const char* fragmentShader, VertexLayoutComponent* layout, u32 layoutCount)
 {
   RendererMeshData* meshData = &mesh->rendererData;
   //create shader program
@@ -673,11 +707,13 @@ void addMesh(Mesh* mesh, const char* vertexShader, const char* fragmentShader)
   u32 fs = loadShader(fragmentShader, GL_FRAGMENT_SHADER);
 
   //link program
+  u32 totalLayoutSize = 0;
   glAttachShader(program, vs);
-  glBindAttribLocation(program, 0, "position");
-  glBindAttribLocation(program, 1, "normal");
-  glBindAttribLocation(program, 2, "texCoord");
-  glBindAttribLocation(program, 3, "texUnit");
+  for (int i = 0; i < layoutCount; i++)
+    {
+      glBindAttribLocation(program, layout[i].location, layout[i].name);
+      totalLayoutSize += layout[i].size;
+    }
   glAttachShader(program, fs);
 
   validateShaderCompilation(vs);
@@ -696,7 +732,11 @@ void addMesh(Mesh* mesh, const char* vertexShader, const char* fragmentShader)
   //VertexBuffer
   glGenBuffers(1, &meshData->vertexBufferKey);
   glBindBuffer(GL_ARRAY_BUFFER, meshData->vertexBufferKey);
-  glBufferData(GL_ARRAY_BUFFER, sizeof(Vertex) * mesh->vertexCount, mesh->vertices, GL_DYNAMIC_DRAW);
+  if (mesh->skinnedMesh)
+    glBufferData(GL_ARRAY_BUFFER, sizeof(SkinnedVertex) * mesh->vertexCount, mesh->vertices, GL_DYNAMIC_DRAW);
+  else
+    glBufferData(GL_ARRAY_BUFFER, sizeof(Vertex) * mesh->vertexCount, mesh->vertices, GL_DYNAMIC_DRAW);
+
   //IndexBuffer
   glGenBuffers(1, &meshData->indexBufferKey);
   glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, meshData->indexBufferKey);
@@ -718,28 +758,27 @@ void addMesh(Mesh* mesh, const char* vertexShader, const char* fragmentShader)
     {
       glBufferData(GL_ELEMENT_ARRAY_BUFFER, meshData->indexCount * sizeof(u32), mesh->indices, GL_DYNAMIC_DRAW);   
     }
+
   
   //generate gpu vertex layout
-  s32 positionAttrib = 0;//glGetAttribLocation(meshData->shaderProgramKey, "position");
-  glEnableVertexAttribArray(positionAttrib);
-  glVertexAttribPointer(positionAttrib, 3, GL_FLOAT, GL_FALSE, sizeof(float)*9 , 0);
-  
-  s32 normalAttrib = 1;//glGetAttribLocation(meshData->shaderProgramKey, "normal");
-  glEnableVertexAttribArray(normalAttrib);
-  glVertexAttribPointer(normalAttrib, 3, GL_FLOAT,   GL_FALSE, sizeof(float)*9 , (const void*)(sizeof(float)*3));
-  
-  s32 texCoordAttrib = 2;//glGetAttribLocation(meshData->shaderProgramKey, "texCoord");
-  glEnableVertexAttribArray(texCoordAttrib);
-  glVertexAttribPointer(texCoordAttrib, 2, GL_FLOAT, GL_FALSE, sizeof(float)*9 , (const void*)(sizeof(float)*6));
-  
-  s32 texUnitAttrib = 3;//glGetAttribLocation(meshData->shaderProgramKey, "texUnit");
+  u32 currentOffset = 0;
+  for (int i = 0; i < layoutCount; i++)
+    {
+      glEnableVertexAttribArray(layout[i].location);
+      glVertexAttribPointer(layout[i].location, layout[i].count, layout[i].type, GL_FALSE, totalLayoutSize, (const void*)currentOffset);
+      currentOffset += layout[i].size;
+    }
 
-  glEnableVertexAttribArray(texUnitAttrib);
-  glVertexAttribPointer(texUnitAttrib, 1, GL_FLOAT, GL_FALSE, sizeof(float)*9 , (const void*)(sizeof(float)*8));
-
+  
   glDetachShader(program, vs);
   glDetachShader(program, fs);
  }
+
+void addMesh(Mesh* mesh, const char* vertexShader, const char* fragmentShader)
+{
+  addMesh(mesh, vertexShader, fragmentShader, defaultLayout, 4);
+}
+
 
 void setVec3Uniform(s32 program, const char* name, vec3 values)
 {
@@ -820,102 +859,11 @@ void setMaterialUniform(s32 program, Material* mat)
 
 void drawMesh(Mesh* mesh, vec3 position, vec3 rotation, vec3 scale)
 {
-
   globalRenderData.meshesToDraw[globalRenderData.meshesToDrawCount] = mesh;
   globalRenderData.meshTransforms[globalRenderData.meshesToDrawCount * 3 + 0] = position;
   globalRenderData.meshTransforms[globalRenderData.meshesToDrawCount * 3 + 1] = rotation;
   globalRenderData.meshTransforms[globalRenderData.meshesToDrawCount * 3 + 2] = scale;
   globalRenderData.meshesToDrawCount++;
-  /*
-  //Set view mode
-  if (globalRenderData.wireFrameMode)
-    {
-      glPolygonMode(GL_FRONT_AND_BACK, GL_LINE);
-    }
-  else
-    {
-      glPolygonMode(GL_FRONT_AND_BACK, GL_FILL);
-    }
-  //Bind this mesh's arrays
-  glBindVertexArray(mesh->rendererData.vertexArrayKey);
-  glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, mesh->rendererData.indexBufferKey);
-  glUseProgram(mesh->rendererData.shaderProgramKey);
-
-  //Generate transformation matrix
-  mat4 viewMatrix = mainCamera.viewMatrix;//Translate(-mainCamera.pos) ;
-  mat4 modelMatrix = 
-    {
-      scale.x,    0.0,              0.0,              0.0,
-      0.0,              scale.y,    0.0,              0.0,
-      0.0,              0.0,              scale.z,    0.0,
-      position.x, position.y, position.z, 1.0
-    };
-  f32 a = rotation.x;
-  f32 b = rotation.y;
-  f32 c = rotation.z;
-  mat4 rotationXMatrix =
-    {
-      1, 0, 0, 0,
-      0, cos(-a), -sin(-a), 0,
-      0, sin(-a), cos(-a), 0,
-      0, 0, 0, 1
-    };
-  mat4 rotationYMatrix =
-    {
-      cos(-b), 0, sin(-b), 0,
-      0, 1, 0, 0,
-      -sin(-b), 0, cos(-b), 0,
-      0, 0, 0, 1
-    };
-  mat4 rotationZMatrix =
-    {
-      cos(-c), -sin(-c), 0, 0,
-      sin(-c), cos(-c), 0, 0,
-      0, 0, 1, 0,
-      0, 0, 0, 1
-    };
-  mat4 rotationMatrix = rotationXMatrix * rotationYMatrix * rotationZMatrix;
-   
-  modelMatrix = modelMatrix  * rotationMatrix;
-
-  //Send matrix
-
-  s32 location = glGetUniformLocation(mesh->rendererData.shaderProgramKey, "mvpMatrix");
-  if (location == -1)
-    {
-        location = glGetUniformLocation(mesh->rendererData.shaderProgramKey, "vpMatrix");
-	Assert(location != -1);
-	mat4 vpMatrix = mainCamera.projectionMatrix * viewMatrix;
-	glUniformMatrix4fv(location, 1, GL_FALSE, (float*)&vpMatrix);
-
-	location = glGetUniformLocation(mesh->rendererData.shaderProgramKey, "mMatrix");
-	Assert(location != -1);
-	glUniformMatrix4fv(location, 1, GL_FALSE, (float*)&modelMatrix);	
-    }
-  else
-    {
-      mat4 mvp =  mainCamera.projectionMatrix * viewMatrix * modelMatrix;
-      glUniformMatrix4fv(location, 1, GL_FALSE, (float*)&mvp);
-    }
- 
-  location = glGetUniformLocation(mesh->rendererData.shaderProgramKey, "normalMatrix");
-  if (location != -1)
-    {
-      mat4 normalMatrix;
-      gluInvertMatrix((float*)&modelMatrix, (float*)&normalMatrix);
-      normalMatrix = Transpose(normalMatrix);
-      glUniformMatrix4fv(location, 1, GL_FALSE, (float*)&normalMatrix);
-    }
-  
-  vec3 cameraPos = getCameraPos(&mainCamera);
-  setVec3Uniform(mesh->rendererData.shaderProgramKey, "ViewPos", cameraPos);
-
-  setLightUniform(mesh->rendererData.shaderProgramKey);
-  setMaterialUniform(mesh->rendererData.shaderProgramKey, &mesh->material);
-  glDrawElements(GL_TRIANGLES, mesh->rendererData.indexCount, GL_UNSIGNED_INT, NULL);
-
-  //shadow map
-  */
 }
 
 void rendererBeginScene()
@@ -1178,6 +1126,39 @@ void calculateDirLightPositions()
   d->shadowMatrix = Orthographic(min.x, max.x, min.y, max.y, 0.1, 30);      
 }
 
+void glSetModelViewProjectionMatrices(u32 program, mat4* projection, mat4* view, mat4* model)
+{
+  s32 location = glGetUniformLocation(program, "mvpMatrix");
+  if (location == -1)
+    {      
+      location = glGetUniformLocation(program, "vpMatrix");
+      Assert(location != -1);
+      mat4 vpMatrix = *projection * *view;
+      glUniformMatrix4fv(location, 1, GL_FALSE, (float*)&vpMatrix);
+      location = glGetUniformLocation(program, "mMatrix");
+      Assert(location != -1);
+      glUniformMatrix4fv(location, 1, GL_FALSE, (float*)model);
+    }  
+  else
+    {
+      mat4 mvp =  *projection * *view * *model;
+      glUniformMatrix4fv(location, 1, GL_FALSE, (float*)&mvp);
+    }
+}
+
+//Takes the model matrix. NOT the normal itself
+void glSetNormalMatrix(u32 program, mat4* modelMatrix)
+{
+  s32 location = glGetUniformLocation(program, "normalMatrix");
+  if (location != -1)
+    {
+      mat4 normalMatrix;
+      gluInvertMatrix((float*)modelMatrix, (float*)&normalMatrix);
+      normalMatrix = Transpose(normalMatrix);
+      glUniformMatrix4fv(location, 1, GL_FALSE, (float*)&normalMatrix);
+    }
+}
+
 void flushMeshesAndRender()
 {
   //Set view mode
@@ -1251,21 +1232,41 @@ void flushMeshesAndRender()
   for (int i = 0; i < globalRenderData.meshesToDrawCount; i++)
     {
       Mesh* mesh = globalRenderData.meshesToDraw[i];
-
+      
       glBindVertexArray(mesh->rendererData.vertexArrayKey);
       glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, mesh->rendererData.indexBufferKey);
-      glUseProgram(globalRenderData.shadowMapShader);
 
+      u32 shadowShader;
+      if (mesh->skinnedMesh)
+	{
+	  shadowShader = globalRenderData.skinnedShadowMapShader;
+	  SkinnedMesh* skinnedMesh = (SkinnedMesh*)mesh->skinnedMesh;
+	  
+	  glUseProgram(globalRenderData.skinnedShadowMapShader);
+	  calculateSkinnedCompositeMatrices(skinnedMesh);
+
+	  s32 location = glGetUniformLocation(globalRenderData.skinnedShadowMapShader, "boneCompositeMatrices");
+	  //mAssert(location != -1);
+	  glUniformMatrix4fv(location, skinnedMesh->animations->jointCount, GL_FALSE, (float*)skinnedMesh->animations->compositeMatrices);
+	  errCheck();
+	}
+	else
+	{
+	  shadowShader = globalRenderData.shadowMapShader;
+	  //normal path
+	  glUseProgram(globalRenderData.shadowMapShader);
+
+	}
       //assumes orthographic
       s32 location = glGetUniformLocation(globalRenderData.shadowMapShader, "mMatrix");
       glUniformMatrix4fv(location, 1, GL_FALSE, (float*)&globalRenderData.meshModelMatrices[i]);
 
-      //mat4 lightMatrix = mainCamera.projectionMatrix * mainCamera.viewMatrix;
       location = glGetUniformLocation(globalRenderData.shadowMapShader, "lightMatrix");
       glUniformMatrix4fv(location, 1, GL_FALSE, (float*)&lightMatrix);
 
+
       glDrawElements(GL_TRIANGLES, mesh->rendererData.indexCount, GL_UNSIGNED_INT, NULL);
-      errCheck();
+      errCheck();      
     }
   glCullFace(GL_BACK);
   glViewport(0,0,globalRenderData.frameBufferWidth, globalRenderData.frameBufferHeight);
@@ -1285,39 +1286,16 @@ void flushMeshesAndRender()
       glUseProgram(mesh->rendererData.shaderProgramKey);
 
       //Generate transformation matrix
-      mat4 viewMatrix = mainCamera.viewMatrix;//Translate(-mainCamera.pos) ;
+      mat4 viewMatrix = mainCamera.viewMatrix;
       //Send matrix
-      
-      s32 location = glGetUniformLocation(mesh->rendererData.shaderProgramKey, "mvpMatrix");
-      if (location == -1)
-	{
-	  location = glGetUniformLocation(mesh->rendererData.shaderProgramKey, "vpMatrix");
-	  Assert(location != -1);
-	  mat4 vpMatrix = mainCamera.projectionMatrix * viewMatrix;
-	  glUniformMatrix4fv(location, 1, GL_FALSE, (float*)&vpMatrix);
 
-	  location = glGetUniformLocation(mesh->rendererData.shaderProgramKey, "mMatrix");
-	  Assert(location != -1);
-	  glUniformMatrix4fv(location, 1, GL_FALSE, (float*)&globalRenderData.meshModelMatrices[i]);	
-	}
-      else
-	{
-	  mat4 mvp =  mainCamera.projectionMatrix * viewMatrix * globalRenderData.meshModelMatrices[i];
-	  glUniformMatrix4fv(location, 1, GL_FALSE, (float*)&mvp);
-	}
- 
-      location = glGetUniformLocation(mesh->rendererData.shaderProgramKey, "normalMatrix");
+      glSetModelViewProjectionMatrices(mesh->rendererData.shaderProgramKey, &mainCamera.projectionMatrix, &viewMatrix, &globalRenderData.meshModelMatrices[i]);
+
+      glSetNormalMatrix(mesh->rendererData.shaderProgramKey, &globalRenderData.meshModelMatrices[i]);
+      s32 location = glGetUniformLocation(mesh->rendererData.shaderProgramKey, "lightSpaceMatrix");
       if (location != -1)
 	{
-	  mat4 normalMatrix;
-	  gluInvertMatrix((float*)&globalRenderData.meshModelMatrices[i], (float*)&normalMatrix);
-	  normalMatrix = Transpose(normalMatrix);
-	  glUniformMatrix4fv(location, 1, GL_FALSE, (float*)&normalMatrix);
-	}
-      
-      location = glGetUniformLocation(mesh->rendererData.shaderProgramKey, "lightSpaceMatrix");
-      // if (location != -1)
-	{
+	  Assert(location != -1);
 	  glUniformMatrix4fv(location, 1, GL_FALSE, (float*)&lightMatrix);
 	}
       location = glGetUniformLocation(mesh->rendererData.shaderProgramKey, "blueNoise");
@@ -1325,7 +1303,15 @@ void flushMeshesAndRender()
 	{
 	  glUniform1i(location, 1);
 	}
-      
+
+      if (mesh->skinnedMesh)
+	{
+	  SkinnedMesh* skinnedMesh = (SkinnedMesh*)mesh->skinnedMesh;
+	  s32 location = glGetUniformLocation(mesh->rendererData.shaderProgramKey, "boneCompositeMatrices");
+	  //Assert(location != -1);
+	  glUniformMatrix4fv(location, skinnedMesh->animations->jointCount, GL_FALSE, (float*)skinnedMesh->animations->compositeMatrices);
+	  errCheck();
+	}
 
       vec3 cameraPos = getCameraPos(&mainCamera);
       setVec3Uniform(mesh->rendererData.shaderProgramKey, "ViewPos", cameraPos);

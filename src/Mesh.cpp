@@ -138,7 +138,7 @@ void serializeMeshes(Mesh** meshes, u32 meshCount, const char* fileOutput)
       Mesh* mesh = meshes[i];
       for (int j = 0; j < mesh->vertexCount; j++)
 	{
-	  fwrite(mesh->vertices + j, sizeof(Vertex) - sizeof(float), 1, fileHandle);
+	  fwrite((Vertex*)mesh->vertices + j, sizeof(Vertex) - sizeof(float), 1, fileHandle);
 	}
 
       fwrite(mesh->indices, sizeof(u32), mesh->rendererData.indexCount, fileHandle);
@@ -236,14 +236,14 @@ Mesh** deserializeMeshes(const char* fileInput, u32* meshCount)
       meshes[i]->visible = true;
 
       //Load vertices
-      meshes[i]->vertices = (Vertex*)malloc(sizeof(Vertex) * mHeaders[i].totalVertices);
+      meshes[i]->vertices = malloc(sizeof(Vertex) * mHeaders[i].totalVertices);
       meshes[i]->vertexCount = mHeaders[i].totalVertices;
       
       for (int j = 0; j < mHeaders[i].totalVertices; j++)
 	{
 	  //subtract float because of texUnit. Dont want to serialize that
-	  fread(meshes[i]->vertices + j, sizeof(Vertex) - sizeof(float), 1, fileHandle);
-	  meshes[i]->vertices[j].texUnit = 0;
+	  fread((Vertex*)meshes[i]->vertices + j, sizeof(Vertex) - sizeof(float), 1, fileHandle);
+	  ((Vertex*)meshes[i]->vertices)[j].texUnit = 0;
 	}
       
       //Load indices
@@ -298,20 +298,41 @@ Mesh** deserializeMeshes(const char* fileInput, u32* meshCount)
   return meshes;
 }
 
+//TODO: please find a better solution for the skinned vertex situation
 void calculateNormals(Mesh* mesh)
 {
-  for (int i = 0; i < mesh->rendererData.indexCount; i += 3)
+  if (mesh->skinnedMesh)
     {
-      vec3 normal = Cross(mesh->vertices[mesh->indices[i + 2]].pos - mesh->vertices[mesh->indices[i + 1]].pos,
-			  mesh->vertices[mesh->indices[i + 1]].pos - mesh->vertices[mesh->indices[i + 0]].pos);
-      mesh->vertices[mesh->indices[i + 0]].normal += normal;
-      mesh->vertices[mesh->indices[i + 1]].normal += normal;
-      mesh->vertices[mesh->indices[i + 2]].normal += normal;
+      SkinnedVertex* vertices = (SkinnedVertex*)mesh->vertices;	  
+      for (int i = 0; i < mesh->rendererData.indexCount; i += 3)
+	{
+	  vec3 normal = Cross(vertices[mesh->indices[i + 2]].pos - vertices[mesh->indices[i + 1]].pos,
+			      vertices[mesh->indices[i + 1]].pos - vertices[mesh->indices[i + 0]].pos);
+	  vertices[mesh->indices[i + 0]].normal += normal;
+	  vertices[mesh->indices[i + 1]].normal += normal;
+	  vertices[mesh->indices[i + 2]].normal += normal;
+	}
+      for (int i = 0; i < mesh->vertexCount; i += 3)
+	{
+	  vertices[i].normal = Normalize(vertices[i].normal);
+	}
     }
-  for (int i = 0; i < mesh->vertexCount; i += 3)
-      {
-	mesh->vertices[i].normal = Normalize(mesh->vertices[i].normal);
-      }
+  else
+    {
+      Vertex* vertices = (Vertex*)mesh->vertices;
+      for (int i = 0; i < mesh->rendererData.indexCount; i += 3)
+	{
+	  vec3 normal = Cross(vertices[mesh->indices[i + 2]].pos - vertices[mesh->indices[i + 1]].pos,
+			      vertices[mesh->indices[i + 1]].pos - vertices[mesh->indices[i + 0]].pos);
+	  vertices[mesh->indices[i + 0]].normal += normal;
+	  vertices[mesh->indices[i + 1]].normal += normal;
+	  vertices[mesh->indices[i + 2]].normal += normal;
+	}
+      for (int i = 0; i < mesh->vertexCount; i += 3)
+	{
+	  vertices[i].normal = Normalize(vertices[i].normal);
+	}
+    }
 }
 
 Mesh** loadModel(const char* modelFile, u32* meshCount)

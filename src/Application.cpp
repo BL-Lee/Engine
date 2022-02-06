@@ -54,6 +54,7 @@ typedef double   f64;
 typedef hmm_vec2 vec2;
 typedef hmm_vec3 vec3;
 typedef hmm_vec4 vec4;
+typedef hmm_quaternion quaternion;
 typedef hmm_mat4 mat4;
 
 //Global Variables
@@ -186,17 +187,18 @@ Mesh* selectMesh(double mouse_x, double mouse_y)
 		    {
 		      //THESE ARE NOT IN WORLD SPACE YET
 		      vec3 positions[3];
+		      Vertex* vertices = (Vertex*)mesh->vertices;
 		      if (mesh->indices)
 			{
-			  positions[0] =  mesh->vertices[mesh->indices[index + 0]].pos;
-			  positions[1] =  mesh->vertices[mesh->indices[index + 1]].pos;
-			  positions[2] =  mesh->vertices[mesh->indices[index + 2]].pos;
+			  positions[0] =  vertices[mesh->indices[index + 0]].pos;
+			  positions[1] =  vertices[mesh->indices[index + 1]].pos;
+			  positions[2] =  vertices[mesh->indices[index + 2]].pos;
 			}
 		      else
 			{
-			  positions[0] = mesh->vertices[index + 0].pos;
-			  positions[1] = mesh->vertices[index + 1].pos;
-			  positions[2] = mesh->vertices[index + 2].pos;
+			  positions[0] = vertices[index + 0].pos;
+			  positions[1] = vertices[index + 1].pos;
+			  positions[2] = vertices[index + 2].pos;
 			}
 		      vec4 worldPositions[3] = 
 			{
@@ -258,12 +260,15 @@ void renderWindow()
   ImGui_ImplGlfw_NewFrame();
 
   frameElapsed += globalDeltaTime;
-  if (frameElapsed >= 1 / anim->frameRate) {
-    bobFrame = ( bobFrame + 1 ) % anim->frameCount;
-    frameElapsed = 0.0f;
-    updateVertexPositionsManually(bobMesh, bobFrame);
+  while (frameElapsed >= 1.0f / anim->frameRate) {
+    anim->currentFrames[0] = bobMesh->animations->currentFrames[1];
+    anim->currentFrames[1] = ( bobMesh->animations->currentFrames[1] + 1 ) % anim->frameCount;
+    frameElapsed -= 1.0f / anim->frameRate;
   }
-  
+  f32 interp = frameElapsed * anim->frameRate;
+  anim->currentInterps[0] = 1 - interp;
+  anim->currentInterps[1] = interp;
+
   //Render Entities
   startGLTimer(&GPUMeshTimer);
   for (int i = 0; i < MAX_REGISTRY_SIZE; i++)
@@ -473,8 +478,6 @@ int initEngine()
   //Init Entities
   initEntityRegistry();
 
-  //TEMP: Init scene
-  //TODO: Scene file serialization
   defaultTexture = requestTextureKey("textures/defaultTexture.png");
 
   for (int i = 0; i < RENDERER_POINT_LIGHT_COUNT; i++)
@@ -497,10 +500,11 @@ int initEngine()
   bob->rotation.x = -3.14 / 2;
   bob->meshes = bobMesh->meshes;
   bob->meshCount = bobMesh->meshCount;
+  
   for (int i = 0; i < bobMesh->meshCount; i++)
     {      
       calculateNormals(bobMesh->meshes[i]);
-      addMesh(bobMesh->meshes[i], "res/shaders/basicLightVertex.glsl", "res/shaders/basicLightFrag.glsl");
+      addMesh(bobMesh->meshes[i], "res/shaders/skinnedBasicLightVertex.glsl", "res/shaders/basicLightFrag.glsl", skinnedDefaultlayout, 6);
       loadMaterial("res/materials/defaultMaterial.mat", &bob->meshes[i]->material);
     }
   bob->scale.x = 1.0;
@@ -525,7 +529,7 @@ int initEngine()
   free(grid);
   loadMaterial("res/materials/defaultMaterial.mat", &cave->meshes[0]->material);
   */
-  loadScene("res/scenes/blankScene.scene");
+  loadScene("res/scenes/testScene.scene");
   
   return 0;
 }
