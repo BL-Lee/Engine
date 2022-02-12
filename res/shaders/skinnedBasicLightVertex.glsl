@@ -96,7 +96,8 @@ vec3 calcDirLightContributionDiffSpec(DirectionalLight light, vec3 normal, vec3 
 
 
 flat out vec3 ambient;
-flat out vec3 diffSpec;
+flat out vec3 diffSpecDir;
+flat out vec3 diffSpecPoint;
 out vec4 lightSpaceCoords;
 void main()
 {
@@ -118,12 +119,14 @@ void main()
       diffSpecOut += calcPointLightContributionDiffSpec(pointLights[i], Normal, WorldPos, viewDir);
       ambientOut += (pointLights[i].ambientColour * material.ambient);
     }
+  diffSpecPoint = diffSpecOut;
+  diffSpecOut = vec3(0.0);
   for (int i = 0; i < DIRECTIONAL_LIGHT_COUNT; i++)
     {
       diffSpecOut += calcDirLightContributionDiffSpec(dirLights[i], Normal, WorldPos, viewDir);
       ambientOut += (dirLights[i].ambientColour * material.ambient);
     }
-  diffSpec = diffSpecOut;
+  diffSpecDir = diffSpecOut;
   ambient = ambientOut;
 
   lightSpaceCoords = lightSpaceMatrix * vec4(WorldPos, 1.0);

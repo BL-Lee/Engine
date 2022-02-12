@@ -10,7 +10,8 @@ uniform sampler2D blueNoise;
 //https://learnopengl.com/Advanced-Lighting/Shadows/Shadow-Mapping
 
 flat in vec3 ambient;
-flat in vec3 diffSpec;
+flat in vec3 diffSpecDir;
+flat in vec3 diffSpecPoint;
 in vec4 lightSpaceCoords;
 out vec4 outColour;
 /*
@@ -77,9 +78,9 @@ void main()
 #else //PCF_SHADOWS
   float shadow = currentDepth - bias > closestDepth ? 1.0 : 0.0;
 #endif //PCF_SHADOWS
-  outColour = vec4(ambient + (1.0 - shadow) * diffSpec, 1.0);
+  outColour = vec4(ambient + diffSpecPoint + (1.0 - shadow) * diffSpecDir, 1.0);
 #else //SHADOWS
-  outColour = vec4(ambient +  diffSpec, 1.0);
+  outColour = vec4(ambient +  diffSpecPoint + diffSpecDir, 1.0);
 #endif //SHADOWS
 }
 

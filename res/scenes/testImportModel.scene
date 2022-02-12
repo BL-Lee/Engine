@@ -1,0 +1,28 @@
+#newDirLight
+#dirLightDir 0.0 10.0 1.0
+#dirLightDiffuse 0.5 0.5 0.5
+#dirLightSpecular 0.9 0.9 0.9
+#dirLightAmbient 0.3 0.3 0.3
+#newPointLight
+#pointLightDiffuse 1.0 0.1 0.1
+#pointLightAmbient 0.1 0.0 0.0
+#pointLightSpecular 1.0 0.3 0.3
+#pointLightIntensity 0.5
+#newPointLight
+#pointLightDiffuse 0.1 1.0 0.75
+#pointLightAmbient 0.1 0.0 0.3
+#pointLightSpecular 0.2 0.9 0.9
+#pointLightIntensity 0.2
+
+#entity res/entities/Dodecahedron.entity
+#eposition 1.0 1.0 1.0
+#escale 0.2 0.2 0.2
+
+#entity res/entities/Plane.entity
+#eposition 0.0 0.0 0.0
+#escale 10.0 10.0 10.0
+
+#entity res/entities/Arrows.entity
+#eposition 0.0 5.0 0.0
+#escale 1.0 1.0 1.0
+

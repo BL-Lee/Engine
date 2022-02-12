@@ -82,6 +82,7 @@ static f32 fontSize = 1.0f;
 
 
 //Custom includes
+#include "ImportUtils.cpp"
 #include "DebugLogging.cpp"
 #include "LinkedList.cpp"
 #include "Input.cpp"
@@ -529,7 +530,7 @@ int initEngine()
   free(grid);
   loadMaterial("res/materials/defaultMaterial.mat", &cave->meshes[0]->material);
   */
-  loadScene("res/scenes/testScene.scene");
+  loadScene("res/scenes/testImportModel.scene");
   
   return 0;
 }

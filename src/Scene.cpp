@@ -6,7 +6,7 @@ bool loadScene(const char* filename)
       fprintf(stderr,"WARNING: Cannot open scene file: %s\n", filename);
       return false;
     }
-  Entity* currentEntity;
+  Entity* currentEntity = 0;
   char buffer[512];
   while (fgets(buffer, 512, fileHandle))
     {
@@ -19,14 +19,17 @@ bool loadScene(const char* filename)
 	}
       else if (strstr(buffer, "#eposition"))
 	{
+	  Assert(currentEntity);
 	  currentEntity->position = loadVec3Line("#eposition", buffer);
 	}
       else if (strstr(buffer, "#erotation"))
 	{
+	  Assert(currentEntity);
 	  currentEntity->rotation = loadVec3Line("#erotation", buffer);
 	}
       else if (strstr(buffer, "#escale"))
 	{
+	  Assert(currentEntity);
 	  currentEntity->scale = loadVec3Line("#escale", buffer);
 	}
       else if (strstr(buffer, "#newDirLight"))
