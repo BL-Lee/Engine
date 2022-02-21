@@ -1,4 +1,10 @@
 cmake_minimum_required(VERSION 3.10)
+# Fix behavior of CMAKE_CXX_STANDARD when targeting macOS.
+  if (POLICY CMP0025)
+    cmake_policy(SET CMP0025 NEW)
+      endif ()
+      set (CMAKE_CXX_STANDARD 11)
+
 
 #imgui stuff
 project(imgui)
@@ -28,6 +34,8 @@ target_include_directories(Engine PUBLIC dependencies/stb)
 target_include_directories(Engine PUBLIC dependencies/imgui-master)
 target_include_directories(Engine PUBLIC dependencies/msdfgen-atlas-gen)
 target_include_directories(Engine PUBLIC dependencies/perlin-noise/src)
+target_include_directories(Engine PUBLIC dependencies/OpenFBX/src)
+
 
 target_link_libraries(Engine "-framework Cocoa")
 target_link_libraries(Engine "-framework OpenGL")
@@ -35,7 +43,8 @@ target_link_libraries(Engine "-framework IOKit")
 
 target_link_libraries(Engine ${PROJECT_LINK_LIBS})
 
-set (CMAKE_CXX_FLAGS "-g -DDEBUG_ASSERT")
+#set (CMAKE_CXX_FLAGS "-g -DDEBUG_ASSERT -fsanitize=address ")
+set (CMAKE_CXX_FLAGS "-g -DDEBUG_ASSERT -Wno-c++11-extensions -Wno-narrowing")
 #add_definitions("DEBUG_ASSERT")
 
 set_target_properties( Engine

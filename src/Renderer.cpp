@@ -39,7 +39,7 @@ struct DirectionalLight
 #define RENDERER_MAX_INDICES (RENDERER_MAX_QUADS * 6)
 #define RENDERER_BUFFER_COUNT 2
 
-#define RENDERER_MESH_DRAW_COUNT 128
+#define RENDERER_MESH_DRAW_COUNT 512
 
 #define RENDERER_UI_MODE 0
 #define RENDERER_TEXTURE_MODE 1
@@ -859,10 +859,11 @@ void setMaterialUniform(s32 program, Material* mat)
 
 void drawMesh(Mesh* mesh, vec3 position, vec3 rotation, vec3 scale)
 {
+  Assert(globalRenderData.meshesToDrawCount < RENDERER_MESH_DRAW_COUNT);
   globalRenderData.meshesToDraw[globalRenderData.meshesToDrawCount] = mesh;
   globalRenderData.meshTransforms[globalRenderData.meshesToDrawCount * 3 + 0] = position;
   globalRenderData.meshTransforms[globalRenderData.meshesToDrawCount * 3 + 1] = rotation;
-  globalRenderData.meshTransforms[globalRenderData.meshesToDrawCount * 3 + 2] = scale;
+  globalRenderData.meshTransforms[globalRenderData.meshesToDrawCount * 3 + 2] = scale;  
   globalRenderData.meshesToDrawCount++;
 }
 
@@ -1244,10 +1245,12 @@ void flushMeshesAndRender()
 	  
 	  glUseProgram(globalRenderData.skinnedShadowMapShader);
 	  calculateSkinnedCompositeMatrices(skinnedMesh);
-
+	  if (skinnedMesh->currentAnimation != -1) {
 	  s32 location = glGetUniformLocation(globalRenderData.skinnedShadowMapShader, "boneCompositeMatrices");
 	  //mAssert(location != -1);
+	  
 	  glUniformMatrix4fv(location, skinnedMesh->animations->jointCount, GL_FALSE, (float*)skinnedMesh->animations->compositeMatrices);
+	  }
 	  errCheck();
 	}
 	else
@@ -1307,9 +1310,11 @@ void flushMeshesAndRender()
       if (mesh->skinnedMesh)
 	{
 	  SkinnedMesh* skinnedMesh = (SkinnedMesh*)mesh->skinnedMesh;
+	  if (skinnedMesh->currentAnimation != -1) {
 	  s32 location = glGetUniformLocation(mesh->rendererData.shaderProgramKey, "boneCompositeMatrices");
 	  //Assert(location != -1);
 	  glUniformMatrix4fv(location, skinnedMesh->animations->jointCount, GL_FALSE, (float*)skinnedMesh->animations->compositeMatrices);
+	  }
 	  errCheck();
 	}
 

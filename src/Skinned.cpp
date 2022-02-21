@@ -2,7 +2,8 @@
 
 void calculateSkinnedCompositeMatrices(SkinnedMesh* skinnedMesh)
 {
-  SkinnedAnimation* anim = skinnedMesh->animations;
+  if (skinnedMesh->currentAnimation == -1) return;
+  SkinnedAnimation* anim = skinnedMesh->animations + skinnedMesh->currentAnimation;
   for (int i = 0; i < anim->jointCount; i++)
     {
       vec3 position = {0.0,0.0,0.0};

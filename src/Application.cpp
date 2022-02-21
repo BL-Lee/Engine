@@ -30,6 +30,7 @@
 //Debug defines
 #define DEBUG_GL 1
 #define DEBUG_INIT_STATS 1
+#define DEBUG_IMPORT 0
 
 //Typedefs
 typedef uint8_t  u8;
@@ -94,6 +95,7 @@ static f32 fontSize = 1.0f;
 #include "Renderer.cpp"
 #include "STL.cpp"
 #include "OBJLoader.cpp"
+#include "FBX.cpp"
 #include "Camera.cpp"
 #include "EntityRegistry.cpp"
 #include "Random.cpp"
@@ -494,33 +496,51 @@ int initEngine()
   arrows->visible = false;
   translationArrows = arrows->id;
 
+
+  SkinnedMesh* spiderMesh = loadFBX("res/models/Spider.fbx");
+
+  Entity* spider = requestNewEntity("spider");
+
+  /*
+  for (int i = 0; i < spiderMesh->meshCount; i++)
+    {
+      for (int j = 0; j < spiderMesh->meshes[i]->vertexCount; j += 70)
+	{
+	  SkinnedVertex v = ((SkinnedVertex*)spiderMesh->meshes[i]->vertices)[j];
+	  Entity* dodec = deserializeEntity("res/entities/smallArrows.entity");
+	  dodec->position = v.pos;
+	}
+    }
+  */
+
+  spider->meshes = spiderMesh->meshes;
+  spider->meshCount = spiderMesh->meshCount;
+  spiderMesh->currentAnimation = -1;
+  
+  for (int i = 0; i < spider->meshCount; i++)
+    {
+      addMesh(spider->meshes[i], "res/shaders/basicLightVertex.glsl", "res/shaders/basicLightFrag.glsl", skinnedDefaultlayout, 6);
+      loadMaterial("res/materials/defaultMaterial.mat", &spider->meshes[i]->material);
+    }
+  //Entity* spider = deserializeEntity("res/entities/spiderOBJ.entity");
+
   bobMesh = loadMD5Mesh("res/models/bob_lamp_update.md5mesh");
   anim = loadMD5Anim("res/models/bob_lamp_update.md5anim", bobMesh);
+  //bobMesh = loadMD5Mesh("res/models/Spider.md5mesh");
+  //anim = loadMD5Anim("res/models/Spider.md5anim", bobMesh);
+
   bob = requestNewEntity("bob");
   bob->position.y -= 4.0f;
   bob->rotation.x = -3.14 / 2;
   bob->meshes = bobMesh->meshes;
   bob->meshCount = bobMesh->meshCount;
-  
+  bobMesh->currentAnimation = 0;
   for (int i = 0; i < bobMesh->meshCount; i++)
     {      
       calculateNormals(bobMesh->meshes[i]);
       addMesh(bobMesh->meshes[i], "res/shaders/skinnedBasicLightVertex.glsl", "res/shaders/basicLightFrag.glsl", skinnedDefaultlayout, 6);
       loadMaterial("res/materials/defaultMaterial.mat", &bob->meshes[i]->material);
     }
-  bob->scale.x = 1.0;
-  bob->scale.y = 1.0;
-  bob->scale.z = 1.0;
-  /*
-  for (int i = 0; i < anim->jointCount; i++)
-    {
-      vec4 pos = {0.0, 0.0, 0.0, 1.0};
-      pos = anim->frames[0].joints[i].world * pos;
-      Entity* dodec = deserializeEntity("res/entities/smallArrows.entity");
-      pos /= -pos.w;
-      dodec->position = pos.xyz;      
-    }
-  */
   /*
   //TEMP: Generate cave
   vec3i dims = {16,16,16};

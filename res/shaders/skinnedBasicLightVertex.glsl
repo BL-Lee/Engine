@@ -13,7 +13,7 @@ uniform mat4 mMatrix;
 uniform mat4 normalMatrix;
 uniform vec3 ViewPos;
 uniform mat4 lightSpaceMatrix;
-uniform mat4 boneCompositeMatrices[64];
+uniform mat4 boneCompositeMatrices[128];
 
 struct PointLight
 {

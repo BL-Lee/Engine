@@ -254,8 +254,9 @@ void drawDebugConsole()
 			  //ImGui::Text("scale: %f %f %f", e->meshes[m]->scale.x, e->meshes[m]->scale.y, e->meshes[m]->scale.z);
 			  ImGui::Text("indexCount: %d",e->meshes[m]->rendererData.indexCount);
 			  ImGui::Text("vertCount: %d",e->meshes[m]->vertexCount);
-			  ImGui::PopID();
 			  ImGui::Checkbox("Visible", (bool*)&e->meshes[m]->visible);
+			  ImGui::PopID();
+
 			}
 		    }
 		  if (ImGui::CollapsingHeader("PhysicsInfo"))

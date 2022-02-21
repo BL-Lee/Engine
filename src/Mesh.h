@@ -126,6 +126,11 @@ struct SkinnedAnimationFrame
 };
 
 //MD5 version at the moment
+/*
+TODO: Curves between frames,
+If we can fit a bunch of frames to a single curve then we cut down on storing that many frames
+Ie interpolating between N many frames using a bezier curve instead of storing all the N frames and interpolating between 2 of them at a time.
+ */
 struct SkinnedAnimation
 {
   u32 frameCount;
@@ -166,16 +171,13 @@ struct SkinnedMesh
 
 
   SkinnedAnimation* animations;//TODO: multiple animations
+  s16 currentAnimation;
   //u32 animationCount;
   
 };
 
-//CURRENTLY UNUSED:
 //BIG TODO:
 /*
-
-  Base frame rest inverse
-  each frames rest inverse
   Position & orientation of each joint
 */
 

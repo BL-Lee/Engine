@@ -1,0 +1,8 @@
+#scale 0.01 0.01 0.01
+#position 5.0 -5.0 0.0
+#rotation 0.0 0.0 0.0
+
+#meshFile res/models/Only_Spider_with_Animations_Export.obj
+#vert res/shaders/basicLightVertex.glsl
+#frag res/shaders/basicLightFrag.glsl
+

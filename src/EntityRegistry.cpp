@@ -44,6 +44,9 @@ Entity* requestNewEntity()
 	  g->entities[index].visible = true;
 	  g->entities[index].vertShader = NULL;
 	  g->entities[index].fragShader = NULL;
+	  g->entities[index].scale.x = 1.0;
+	  g->entities[index].scale.y = 1.0;
+	  g->entities[index].scale.z = 1.0;
 	  sprintf(g->entities[index].name, "ENTITY %d", g->entityCounter);
 	  return g->entities + index;
 	}

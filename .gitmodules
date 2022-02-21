@@ -1,0 +1,6 @@
+[submodule "dependencies/OpenFBX"]
+	path = dependencies/OpenFBX
+	url = https://github.com/nem0/OpenFBX
+[submodule "dependencies/msdf-atlas-gen"]
+	path = dependencies/msdf-atlas-gen
+	url = https://github.com/Chlumsky/msdfgen

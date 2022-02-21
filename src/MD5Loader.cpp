@@ -82,6 +82,12 @@ hmm_quaternion calculateWQuaternion(hmm_quaternion in)
     }
   return q;
 }
+
+#if DEBUG_IMPORT
+#define printBuffer() {printf("%s", buffer);fflush(stdout);}
+#else
+#define printBuffer()
+#endif
 SkinnedMesh* loadMD5Mesh(const char* fileName)
 {
   FILE* fileHandle = fopen(fileName, "r");
@@ -105,6 +111,7 @@ SkinnedMesh* loadMD5Mesh(const char* fileName)
   
   while (fgets(buffer, 512, fileHandle))
     {
+      printBuffer();
       if (strstr(buffer, "numJoints")){
 	sscanf(buffer,"numJoints %d", &sm->jointCount);
 	sm->joints = (SkinnedJoint*)malloc(sizeof(SkinnedJoint) * sm->jointCount);
@@ -122,9 +129,11 @@ SkinnedMesh* loadMD5Mesh(const char* fileName)
       }
       else if (strstr(buffer, "joints")) {
 	Assert(sm->jointCount != -1);
+	printf("enterin joints\n");
 	for (int j = 0; j < sm->jointCount; j++)
 	  {
 	    Assert(fgets(buffer, 512, fileHandle));
+	    printBuffer();
 	    char nameBuffer[256];
 	    SkinnedJoint* thisJoint = &sm->joints[j];
 	    sscanf(buffer, "%s %d ( %f %f %f ) ( %f %f %f )",
@@ -157,22 +166,25 @@ SkinnedMesh* loadMD5Mesh(const char* fileName)
 	    sm->meshes[meshIndex] = (Mesh*)calloc(1, sizeof(Mesh));
 	    sm->meshes[meshIndex]->visible = 1;
 	    Assert(fgets(buffer, 512, fileHandle));//shader line
+	    printBuffer();
 	    char nameBuffer[256];
+	    filterBlankLinesUntil(fileHandle, buffer, 512, "shader");
 	    sscanf(buffer, "shader %s", nameBuffer);
 	    
 	    sm->meshes[meshIndex]->shaderName = (char*)malloc(strlen(nameBuffer) + 1);
 	    strcpy(sm->meshes[meshIndex]->shaderName, nameBuffer);
 
-	    Assert(fgets(buffer, 512, fileHandle));//blank line
-	    Assert(fgets(buffer, 512, fileHandle));//numverts
+	    filterBlankLinesUntil(fileHandle, buffer, 512, "numverts");
 	    sscanf(buffer, "\tnumverts %d", &sm->meshes[meshIndex]->vertexCount);
 	    sm->meshes[meshIndex]->vertices = calloc(sm->meshes[meshIndex]->vertexCount, sizeof(SkinnedVertex));
+	    
 	    //TEMP
 	    vertexWeights[meshIndex] = (SkinnedVertexWeight*)malloc(sizeof(SkinnedVertexWeight) * sm->meshes[meshIndex]->vertexCount);
 	    	    //SkinnedVertices
 	    for (int v = 0; v < sm->meshes[meshIndex]->vertexCount; v++)
 	      {
 		Assert(fgets(buffer, 512, fileHandle));//vertex
+		printBuffer();
 		int index;
 		SkinnedVertexWeight sw;
 		vec2 uv;
@@ -185,12 +197,9 @@ SkinnedMesh* loadMD5Mesh(const char* fileName)
 		vertexWeights[meshIndex][index] = sw;		       
 	      }
 	    
-	    Assert(fgets(buffer, 512, fileHandle));//Blank line
-
-	    
 	    //Triangles
-	    Assert(fgets(buffer, 512, fileHandle));
 	    int triCount;
+	    filterBlankLinesUntil(fileHandle, buffer, 512, "numtris");
 	    sscanf(buffer, "\tnumtris %d", &triCount);
 	    sm->meshes[meshIndex]->rendererData.indexCount = triCount * 3;
 	    sm->meshes[meshIndex]->indices = (u32*)malloc(sizeof(u32) * triCount * 3);
@@ -198,6 +207,7 @@ SkinnedMesh* loadMD5Mesh(const char* fileName)
 	    for (int v = 0; v < triCount; v++)
 	      {
 		Assert(fgets(buffer, 512, fileHandle));//vertex
+		      printBuffer();
 		int index;
 		int indices[3];
 		sscanf(buffer, "\ttri %d %d %d %d",
@@ -208,20 +218,19 @@ SkinnedMesh* loadMD5Mesh(const char* fileName)
 		sm->meshes[meshIndex]->indices[index * 3 + 2] = indices[2];		
 	      }
 
-	    Assert(fgets(buffer, 512, fileHandle));//Blank line
-
-
-	    
 	    //Weights
-	    Assert(fgets(buffer, 512, fileHandle));
+	          printBuffer();
 	    int weightCount;
+	    filterBlankLinesUntil(fileHandle, buffer, 512, "numweights");
 	    sscanf(buffer, "\tnumweights %d", &weightCounts[meshIndex]);
 	    tempWeights[meshIndex] = (SkinnedWeight*)calloc(weightCounts[meshIndex],sizeof(SkinnedWeight));
+	    Assert(weightCounts[meshIndex] < 5000);
 	    vec3 tempPositions[weightCounts[meshIndex]];
 	    
 	    for (int v = 0; v < weightCounts[meshIndex]; v++)
 	      {
 		Assert(fgets(buffer, 512, fileHandle));//vertex
+		      printBuffer();
 		int index;
 		SkinnedWeight sw;		
 		sscanf(buffer, "\tweight %d %d %f ( %f %f %f )",
@@ -247,19 +256,20 @@ SkinnedMesh* loadMD5Mesh(const char* fileName)
 		    weights[i] = tempWeights[meshIndex][svw.startIndex + i];
 		  }
 		//TODO: sort helper function
-		for (int i = svw.count - 1; i > 0; i--)
+		for (int i = 0; i < svw.count - 1; i++)
 		  {
-		    for (int k = i; k > 0; k--)
+		    for (int k = 0; k < svw.count - i - 1; k++)
 		      {
-			if (weights[k - 1].bias < weights[k].bias)
+			if (weights[k].bias < weights[k + 1].bias)
 			  {
-			    SkinnedWeight temp = weights[k-1];
-			    weights[k - 1] = weights[k];
+			    SkinnedWeight temp = weights[k+1];
+			    weights[k + 1] = weights[k];
 			    weights[k] = temp;
 
 			  }
  		      }
 		  }
+				
 		for (int i = 0; i < svw.count; i++)
 		  {
 		    SkinnedWeight weight = weights[i];
@@ -322,7 +332,7 @@ void updateVertexPositionsManually(SkinnedMesh* skinnedMesh)
       for (int v = 0; v < mesh->vertexCount; v++)
 	{
 	  SkinnedVertex* vertex = &((SkinnedVertex*)mesh->vertices)[v];
-	  vec4 finalVertex = { 0.0, 0.0, 0.0, 1.0 };
+	  vec4 finalVertex = { 0.0, 0.0, 0.0, 0.0 };
 
 	  for (int j = 0; j < 4; j++)
 	    {
@@ -330,6 +340,12 @@ void updateVertexPositionsManually(SkinnedMesh* skinnedMesh)
 	      vec4 newPos = (anim->compositeMatrices[(int)vertex->jointIndices[j]] * zero) * vertex->jointWeights[j];
 	      finalVertex += newPos;
 	      }
+	  //vec3 oldPos = ((SkinnedVertex*)mesh->vertices)[v].pos;
+	  //vec3 finalVert = finalVertex.xyz / finalVertex.w;
+	  //vec3 diff = oldPos - finalVert;
+	  //printf("oldPos: %f %f %f\n", oldPos.x, oldPos.y, oldPos.z);
+	  //printf("finalVert: %f %f %f\n", finalVert.x, finalVert.y, finalVert.z );
+	  //printf("DIFF: %f %f %f\n", diff.x, diff.y, diff.z);
 	  ((SkinnedVertex*)mesh->vertices)[v].pos = finalVertex.xyz / finalVertex.w;
 	  
 	}
@@ -362,6 +378,7 @@ SkinnedAnimation* loadMD5Anim(const char* fileName, SkinnedMesh* associatedMesh)
   char buffer[512];
   while (fgets(buffer, 512, fileHandle))
     {
+      printBuffer();
       if (strstr(buffer, "numFrames"))
 	{
 	  sscanf(buffer,"numFrames %d", &animation->frameCount);
@@ -394,6 +411,7 @@ SkinnedAnimation* loadMD5Anim(const char* fileName, SkinnedMesh* associatedMesh)
 	      int startIndex;
 	      int jointIndex = -1;
 	      fgets(buffer, 512, fileHandle);
+	      printBuffer();
 	      sscanf(buffer, "%s %d %d %d", nameBuffer, &parent, &flags, &startIndex);
 	      jointFlags[i] = flags;
 	      startIndices[i] = startIndex;
@@ -404,10 +422,11 @@ SkinnedAnimation* loadMD5Anim(const char* fileName, SkinnedMesh* associatedMesh)
 	  for (int i = 0; i < animation->frameCount; i++)
 	    {
 	      fgets(buffer, 512, fileHandle);
+	      printBuffer();
 	      sscanf(buffer, "\t( %f %f %f ) ( %f %f %f )",
 		     &animation->frames[i].mins.x,
 		     &animation->frames[i].mins.y,
-		     &animation->frames[i].mins.y,
+		     &animation->frames[i].mins.z,
 		     &animation->frames[i].maxs.x,
 		     &animation->frames[i].maxs.y,
 		     &animation->frames[i].maxs.z);	      		
@@ -421,6 +440,7 @@ SkinnedAnimation* loadMD5Anim(const char* fileName, SkinnedMesh* associatedMesh)
 	  for (int i = 0; i < animation->jointCount; i++)
 	    {
 	      fgets(buffer, 512, fileHandle);
+	      printBuffer();
 	      vec3 position;
 	      hmm_quaternion orientation;
 	      sscanf(buffer, "\t( %f %f %f ) ( %f %f %f )",
@@ -447,7 +467,8 @@ SkinnedAnimation* loadMD5Anim(const char* fileName, SkinnedMesh* associatedMesh)
 	  for (int i = 0; i < numAnimatedComponents; i+=6)
 	    {
 	      fgets(buffer, 512, fileHandle);
-	      sscanf(buffer, "\t%f %f %f %f %f %f",
+	      	      printBuffer();
+	      u32 ret = sscanf(buffer, "\t%f %f %f %f %f %f",
 		     &values[i + 0], &values[i + 1], &values[i + 2],
 		     &values[i + 3], &values[i + 4], &values[i + 5]
 		     );
