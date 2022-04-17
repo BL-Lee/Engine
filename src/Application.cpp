@@ -262,6 +262,7 @@ void renderWindow()
   ImGui_ImplOpenGL3_NewFrame();
   ImGui_ImplGlfw_NewFrame();
 
+
   frameElapsed += globalDeltaTime;
   while (frameElapsed >= 1.0f / anim->frameRate) {
     anim->currentFrames[0] = bobMesh->animations->currentFrames[1];
@@ -497,7 +498,7 @@ int initEngine()
   translationArrows = arrows->id;
 
 
-  SkinnedMesh* spiderMesh = loadFBX("res/models/Spider.fbx");
+  //SkinnedMesh* spiderMesh = loadFBX("res/models/Spider.fbx");
 
   Entity* spider = requestNewEntity("spider");
 
@@ -512,7 +513,7 @@ int initEngine()
 	}
     }
   */
-
+  /*
   spider->meshes = spiderMesh->meshes;
   spider->meshCount = spiderMesh->meshCount;
   spiderMesh->currentAnimation = -1;
@@ -521,7 +522,7 @@ int initEngine()
     {
       addMesh(spider->meshes[i], "res/shaders/basicLightVertex.glsl", "res/shaders/basicLightFrag.glsl", skinnedDefaultlayout, 6);
       loadMaterial("res/materials/defaultMaterial.mat", &spider->meshes[i]->material);
-    }
+      }*/
   //Entity* spider = deserializeEntity("res/entities/spiderOBJ.entity");
 
   bobMesh = loadMD5Mesh("res/models/bob_lamp_update.md5mesh");

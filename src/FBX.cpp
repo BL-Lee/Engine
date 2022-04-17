@@ -1,3 +1,5 @@
+
+#if 0
 #include "miniz.c"
 #include "ofbx.cpp"
 SkinnedMesh* loadFBX(const char* fileName)
@@ -104,3 +106,4 @@ SkinnedMesh* loadFBX(const char* fileName)
   scene->destroy();
   return skinnedMesh;
 }
+#endif
