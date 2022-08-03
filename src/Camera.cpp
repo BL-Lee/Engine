@@ -20,7 +20,16 @@ void initCamera(Camera* c,
   c->farClip = farClip;
   c->pos = pos;
   c->direction = dir;
+  vec3 zero = {0.0,0.0,0.0};
+  c->rotation = zero;
   initCamera(c);
+}
+
+void setCameraViewMatrix(Camera* c)
+{
+  vec3 globalY = {0.0,1.0,0.0};
+  c->viewMatrix = LookAt(c->pos, c->pos + c->direction, globalY);
+  c->inverseViewDirty = true;  
 }
 		
 void setPerspectiveMatrix(Camera* c)
@@ -45,37 +54,22 @@ void setOrthographicMatrix(Camera* c)
 
 void translateCameraLocal(Camera* c, vec3 delta)
 {
-  c->viewMatrix =  Translate(-delta) * c->viewMatrix;
-  c->inverseViewDirty = true;
+  vec3 local = {0.0,0.0,0.0};
+  local -= delta.z *  c->direction;
+  vec3 globalY = {0.0,1.0,0.0};
+  local += Normalize(Cross(c->direction, globalY)) * delta.x;
+  c->pos += local;
+  setCameraViewMatrix(c);
 }
-void translateCameraGlobal(Camera* c, vec3 delta)
-{
-  c->viewMatrix =  c->viewMatrix * Translate(-delta);
-  c->inverseViewDirty = true;
-}
-
 void rotateCameraLocal(Camera* c, vec3 amount)
 {
-  vec3 zAxis = {0.0,0.0,1.0};
-  vec3 yAxis = {0.0,1.0,0.0};
-  vec3 xAxis = {1.0,0.0,0.0};
-  c->viewMatrix = Rotate(amount.z, zAxis) *
-    Rotate(amount.y, yAxis) *
-    Rotate(amount.x, xAxis) *
-    c->viewMatrix;
-  c->inverseViewDirty = true;
+  c->rotation += amount;
+  c->direction.x = cos(c->rotation.y) * cos(c->rotation.x);
+  c->direction.y = sin(c->rotation.x);
+  c->direction.z = sin(c->rotation.y) * cos(c->rotation.x);
+  c->direction = Normalize(c->direction);
+  setCameraViewMatrix(c);
 }
-void rotateCameraGlobal(Camera* c, vec3 amount)
-{
-  vec3 zAxis = {0.0,0.0,1.0};
-  vec3 yAxis = {0.0,1.0,0.0};
-  vec3 xAxis = {1.0,0.0,0.0};
-  c->viewMatrix = c->viewMatrix * Rotate(amount.z, zAxis) *
-    Rotate(amount.y, yAxis) *
-    Rotate(amount.x, xAxis);
-  c->inverseViewDirty = true;
-}
-
 vec3 getCameraPos(Camera* c)
 {
   if (c->inverseViewDirty)
@@ -91,4 +85,8 @@ vec3 getCameraPos(Camera* c)
   return pos;
 }
 
+void getFrustumCornersWorldSpace(Camera* c)
+{
+  
+}
 

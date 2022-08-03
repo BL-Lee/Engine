@@ -6,6 +6,7 @@ uniform sampler2D blueNoise;
 
 #define PCF_SHADOWS 1
 #define SHADOWS 1
+#define POISSON_SHADOWS_STRATIFIED 1
 
 //https://learnopengl.com/Advanced-Lighting/Shadows/Shadow-Mapping
 
@@ -47,6 +48,13 @@ float rand(float seed)
   return floatConstruct(xorshift32(floatBitsToUint(seed)));
 }
 
+vec2 poissonDisk[4] = vec2[](
+  vec2( -0.94201624, -0.39906216 ),
+  vec2( 0.94558609, -0.76890725 ),
+  vec2( -0.094184101, -0.92938870 ),
+  vec2( 0.34495938, 0.29387760 )
+);
+
 void main()
 {
 
@@ -60,24 +68,46 @@ void main()
   // get depth of current fragment from light's perspective
   float currentDepth = projCoords.z;
   float bias = 0.005;
+  float shadow = 0.0;
 
 #if PCF_SHADOWS
-  //Blend
-  float shadow = 0.0;
-  vec2 texelSize = 1.0 / textureSize(shadowMap, 0);
-  for(int x = -1; x <= 1; ++x)
-    {
-      for(int y = -1; y <= 1; ++y)
-        {
-          float pcfDepth = texture(shadowMap, projCoords.xy + vec2(x, y) * texelSize).r; 
-          shadow += currentDepth - bias > pcfDepth ? 1.0 : 0.0;        
-        }    
-    }
-  shadow /= 9.0;
+  {
 
+    //Blend   
+    vec2 texelSize = 1.0 / textureSize(shadowMap, 0);
+    int minWidth = -1;
+    int maxWidth = 1;
+    float contribution = 1.0 / ((maxWidth - minWidth + 1) * (maxWidth - minWidth + 1)) ;
+    for(int x = minWidth; x <= maxWidth; ++x)
+      {
+        for(int y = minWidth; y <= maxWidth; ++y)
+          {
+       
+            float pcfDepth = texture(shadowMap, projCoords.xy + vec2(x, y) * texelSize).r; 
+            shadow += currentDepth - bias > pcfDepth ? contribution : 0.0;        
+          }    
+      }
+
+    /*
+    {
+      for (int i = 0; i < 4; ++i)
+        {
+          float seed = projCoords.x + projCoords.y;
+          uint index = xorshift32(floatBitsToUint(seed)) % 4u;
+          float depth = texture(shadowMap, projCoords.xy + poissonDisk[index] / 700.0).r;
+          shadow += currentDepth - bias > depth ? 0.2 : 0.0;
+        
+        }
+    }
+
+    shadow /= 2.0;*/
+  }
+
+  
 #else //PCF_SHADOWS
-  float shadow = currentDepth - bias > closestDepth ? 1.0 : 0.0;
+    float shadow = currentDepth - bias > closestDepth ? 1.0 : 0.0;
 #endif //PCF_SHADOWS
+  
   outColour = vec4(ambient + diffSpecPoint + (1.0 - shadow) * diffSpecDir, 1.0);
 #else //SHADOWS
   outColour = vec4(ambient +  diffSpecPoint + diffSpecDir, 1.0);

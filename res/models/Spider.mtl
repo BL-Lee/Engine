@@ -1,0 +1,58 @@
+# File produced by Open Asset Import Library (http://www.assimp.sf.net)
+# (assimp v5.2.962067386)
+
+newmtl Box
+Kd 0.640000045 0.640000045 0.640000045
+Ka 0 0 0
+Ks 1 1 1
+Ke 0 0 0
+Tf 0.652229309 0.652229309 0.652229309
+d 0.184713364
+Ns 9.6078434
+illum 2
+
+newmtl Spider_Eye
+Kd 0 0 0
+Ka 0 0 0
+Tf 1 1 1
+d 0
+illum 1
+bump textures\haar_detail_NRM.jpg
+map_bump textures\haar_detail_NRM.jpg
+
+newmtl Spider
+Kd 1 1 1
+Ka 0 0 0
+Ks 1 1 1
+Ke 0 0 0
+Tf 0 0 0
+d 1
+Ns 3.72549009
+illum 2
+map_Kd textures\Spinnen_Bein_tex_COLOR_
+map_Ks textures\Spinnen_Bein_tex_2.jpg
+bump textures\haar_detail_NRM.jpg
+map_bump textures\haar_detail_NRM.jpg
+
+newmtl Spider_teeth
+Kd 0.413203716 0.311263144 0.221805081
+Ka 0 0 0
+Ks 1 1 1
+Ke 0 0 0
+Tf 0 0 0
+d 1
+illum 1
+bump textures\haar_detail_NRM.jpg
+map_bump textures\haar_detail_NRM.jpg
+
+newmtl Spider_Fur
+Kd 0.724826694 0.724826694 0.724826694
+Ka 0 0 0
+Ks 1 1 1
+Ke 0 0 0
+Tf 1 1 1
+d 0
+illum 1
+map_Kd textures\SH3.png
+map_d textures\SH3.png
+

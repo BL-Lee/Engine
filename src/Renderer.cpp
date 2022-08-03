@@ -631,7 +631,7 @@ void initRenderer()
   setRendererShaderMode(0);
 
   initializeFrameBuffer();
-        glGenerateMipmap(GL_TEXTURE_2D);
+  glGenerateMipmap(GL_TEXTURE_2D);
   // //Initialize shadow map // //
   globalRenderData.shadowMapWidth = 1024;
   globalRenderData.shadowMapHeight = 1024;
@@ -1334,6 +1334,22 @@ void flushMeshesAndRender()
   globalRenderData.meshesToDrawCount = 0;
 }
 
+
+f32 getAverageLuminanceOfFrameBuffer()
+{
+  //Get mip map pixel
+  glGenerateMipmap(GL_TEXTURE_2D);
+  int level = 1 + floorf(log2f(fmax(globalRenderData.frameBufferWidth, globalRenderData.frameBufferHeight)));
+  glGetTexImage(GL_TEXTURE_2D, level - 1, GL_RGBA, GL_FLOAT, &globalRenderData.averageColour);
+
+  //Extract luminance from pixel
+  vec4 pixel = globalRenderData.averageColour;
+  f32 luminanceAverage = (0.2125 * pixel.x) + (0.7154 * pixel.y) + (0.0721 * pixel.z);
+  f32 luminanceTemporal = globalRenderData.luminanceTemporal + (luminanceAverage - globalRenderData.luminanceTemporal) * (1 - ExpF(-globalDeltaTime * globalRenderData.exposureChangeRate));
+  return luminanceTemporal;
+  
+}
+
 void swapToFrameBufferAndDraw()
 {
 
@@ -1358,18 +1374,9 @@ void swapToFrameBufferAndDraw()
 
   if (globalRenderData.enabledScreenShader == 4)
     {
-      //Get mip map pixel
-      glGenerateMipmap(GL_TEXTURE_2D);
-      int level = 1 + floorf(log2f(fmax(globalRenderData.frameBufferWidth, globalRenderData.frameBufferHeight)));
-      glGetTexImage(GL_TEXTURE_2D, level - 1, GL_RGBA, GL_FLOAT, &globalRenderData.averageColour);
-
-      //Extract luminance from pixel
-      vec4 pixel = globalRenderData.averageColour;
-      f32 luminanceAverage = (0.2125 * pixel.x) + (0.7154 * pixel.y) + (0.0721 * pixel.z);
-      f32 luminanceTemporal = globalRenderData.luminanceTemporal + (luminanceAverage - globalRenderData.luminanceTemporal) * (1 - ExpF(-globalDeltaTime * globalRenderData.exposureChangeRate));
-      globalRenderData.luminanceTemporal = luminanceTemporal;
+      globalRenderData.luminanceTemporal = getAverageLuminanceOfFrameBuffer();
       //Calculate exposure value
-      globalRenderData.exposure = Clamp(0.2, 0.1 / luminanceTemporal, 10.0);
+      globalRenderData.exposure = Clamp(0.2, 0.1 / globalRenderData.luminanceTemporal, 10.0);
     }
   setFloatUniform(globalRenderData.frameBufferShader, "exposure", globalRenderData.exposure);
 

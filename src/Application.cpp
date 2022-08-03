@@ -357,22 +357,22 @@ void processInputs()
     }
   if (pollInputKey(GLFW_KEY_RIGHT))
     {	  
-      vec3 offset = {0.0,180.0,0.0};      
+      vec3 offset = {0.0,5.0,0.0};      
       rotateCameraLocal(&mainCamera, offset * globalDeltaTime);
     }
   if (pollInputKey(GLFW_KEY_LEFT))
     {
-      vec3 offset = {0.0,-180.0,0.0};
+      vec3 offset = {0.0,-5.0,0.0};
       rotateCameraLocal(&mainCamera, offset * globalDeltaTime);
     }
   if (pollInputKey(GLFW_KEY_UP))
     {	  
-      vec3 offset = {-180.0,0.0,0.0};
+      vec3 offset = {5.0,0.0,0.0};
       rotateCameraLocal(&mainCamera, offset * globalDeltaTime);
     }
   if (pollInputKey(GLFW_KEY_DOWN))
     {
-      vec3 offset = {180.0,0.0,0.0};
+      vec3 offset = {-5.0,0.0,0.0};
       rotateCameraLocal(&mainCamera, offset * globalDeltaTime);
     }
 

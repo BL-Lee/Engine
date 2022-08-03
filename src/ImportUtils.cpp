@@ -26,7 +26,7 @@ vec3 loadVec3Line(const char* tagName, const char* buffer)
 		   &values.x,
 		   &values.y,
 		   &values.z);
-  printf("%s: %f %f %f\n", tagName, values.x,values.y,values.z);
+  printf("%s: %.3f %.3f %.3f\n", tagName, values.x,values.y,values.z);
   if (ret != 3)
     {
       fprintf(stderr,"WARNING: invalid %s tag\n", tagName);

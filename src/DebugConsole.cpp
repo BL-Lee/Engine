@@ -43,6 +43,198 @@ void deleteGLTimer(GLTimer* timer)
   errCheck();
 }
 
+void drawImGuiRGBSlider(vec3* vec, f32 min, f32 max)
+{
+  ImGui::SliderFloat("R: ", &vec->x, min, max);
+  ImGui::SliderFloat("G: ", &vec->y, min, max);
+  ImGui::SliderFloat("B: ", &vec->z, min, max);  
+}
+void drawImGuiXYZSlider(vec3* vec, f32 min, f32 max)
+{
+  ImGui::SliderFloat("X: ", &vec->x, min, max);
+  ImGui::SliderFloat("Y: ", &vec->y, min, max);
+  ImGui::SliderFloat("Z: ", &vec->z, min, max);  
+}
+
+void drawImGuiVec3Text(vec3 vec, const char* prefix)
+{
+  ImGui::Text("%s: %f %f %f", prefix, vec.x, vec.y, vec.z);
+}
+
+void drawDebugLightConsole()
+{
+  //Lights
+  if (ImGui::CollapsingHeader("Lights"))
+    {
+      ImGui::Indent();
+      
+      //Point Lights
+      if (ImGui::CollapsingHeader("Point Lights"))
+	{
+	  ImGui::PushID("Point Lights");
+	  for (int i = 0; i < RENDERER_POINT_LIGHT_COUNT; i++)
+	    {
+	      ImGui::Text("Light: %d\n", i);
+	      ImGui::PushID(i);           // Push i to the id stack (otherwise stuff affects the same thing
+	      PointLight* p = &globalRenderData.pointLights[i];
+	      {
+		if(ImGui::CollapsingHeader("Position"))
+		  {
+		    drawImGuiXYZSlider(&p->position, -10.0f, 10.0f);
+		  }
+		if(ImGui::CollapsingHeader("Colour"))
+		  {
+		    drawImGuiRGBSlider(&p->diffuseColour, 0.0f, 1.0f);
+		  }
+		ImGui::SliderFloat("Intensity: ", &p->intensity, 0.0f, 10.0f);
+	      }
+	      ImGui::PopID();
+	    }
+	  ImGui::PopID();
+
+	}
+            //Directional lights
+      if (ImGui::CollapsingHeader("Directional Lights"))
+	{
+	  ImGui::PushID("Directional Lights");
+	  for (int i = 0; i < RENDERER_DIRECTIONAL_LIGHT_COUNT; i++)
+	    {
+	      ImGui::Text("Dir Light: %d\n", i);
+	      ImGui::PushID(i);           // Push i to the id stack (otherwise stuff affects the same thing
+	      DirectionalLight* p = &globalRenderData.dirLights[i];
+	      {
+		if(ImGui::CollapsingHeader("Direction"))
+		  {
+		    drawImGuiXYZSlider(&p->direction, -1.0, 1.0);
+		  }
+		if(ImGui::CollapsingHeader("Colour"))
+		  {
+		    drawImGuiRGBSlider(&p->diffuseColour, 0.0, 1.0);
+		  }
+	      }
+	      {
+		// Using a Child allow to fill all the space of the window.
+		// It also alows customization
+		ImGui::BeginChild("GameRender");
+		// Get the size of the child (i.e. the whole draw size of the windows).
+		ImVec2 wsize = ImGui::GetWindowSize();
+		// Because I use the texture from OpenGL, I need to invert the V from the UV.
+		ImGui::Image((ImTextureID)globalRenderData.shadowMapTexture, wsize, ImVec2(0, 1), ImVec2(1, 0));
+		ImGui::EndChild();
+	      }
+	      ImGui::PopID();
+	    }
+	  ImGui::PopID();
+	}
+      ImGui::Unindent();	     
+    }
+}
+
+void drawDebugEntitiesConsole()
+{
+  u32 entityIndex = 0;
+    //Entities
+  //TODO: put in separate window
+  if (ImGui::CollapsingHeader("Entity"))
+    {
+      ImGui::Indent();
+      if (globalEntityRegistry->occupiedIndices[entityIndex] && globalEntityRegistry->entities[entityIndex].meshes)
+	{
+	  Entity* e = globalEntityRegistry->entities + entityIndex;
+	  ImGui::PushID(e->id);	  
+	  ImGui::Text("Pos: %f %f %f", e->position.x, e->position.y, e->position.z);
+	  int indexCount = 0;
+	  int vertexCount = 0;
+	  for (int m = 0; m < e->meshCount; m++)
+	    {
+	      indexCount += e->meshes[m]->rendererData.indexCount;
+	      vertexCount += e->meshes[m]->vertexCount;
+	    }
+		    
+	  ImGui::Text("Vertex Count: %d", vertexCount);
+	  ImGui::Text("Index Count: %d", indexCount);
+	  ImGui::Checkbox("Visible", (bool*)&e->visible);
+	  ImGui::Indent();
+	  if (ImGui::CollapsingHeader("mesh debug info"))
+	    {
+	      for (int m = 0; m < e->meshCount; m++)
+		{
+		  ImGui::PushID(m);
+		  ImGui::Text("indexCount: %d",e->meshes[m]->rendererData.indexCount);
+		  ImGui::Text("vertCount: %d",e->meshes[m]->vertexCount);
+		  ImGui::Checkbox("Visible", (bool*)&e->meshes[m]->visible);
+		  ImGui::PopID();
+		}
+	    }
+	  if (ImGui::CollapsingHeader("PhysicsInfo"))
+	    {
+	      drawImGuiVec3Text(e->position, "Position");
+	      drawImGuiVec3Text(e->rotation, "Rotation");
+	      drawImGuiVec3Text(e->scale, "Scale");
+	      drawImGuiVec3Text(e->velocity, "Velocity");
+	    }
+
+	  ImGui::Unindent();
+	  ImGui::PopID();
+	}
+    }
+  ImGui::Unindent();
+}
+
+void drawDebugEntityConsole()
+{
+  if (ImGui::CollapsingHeader("Entities"))
+    {
+      ImGui::Indent();
+      for (int i = 0; i < MAX_REGISTRY_SIZE; i++)
+	{
+	  if (globalEntityRegistry->occupiedIndices[i] && globalEntityRegistry->entities[i].meshes)
+	    {
+	      Entity* e = globalEntityRegistry->entities + i;
+	      ImGui::PushID(e->id);
+	      if (ImGui::CollapsingHeader(e->name))
+		{
+		  ImGui::Text("Pos: %f %f %f", e->position.x, e->position.y, e->position.z);
+		  int indexCount = 0;
+		  int vertexCount = 0;
+		  for (int m = 0; m < e->meshCount; m++)
+		    {
+		      indexCount += e->meshes[m]->rendererData.indexCount;
+		      vertexCount += e->meshes[m]->vertexCount;
+		    }
+		    
+		  ImGui::Text("Vertex Count: %d", vertexCount);
+		  ImGui::Text("Index Count: %d", indexCount);
+		  ImGui::Checkbox("Visible", (bool*)&e->visible);
+		  ImGui::Indent();
+		  if (ImGui::CollapsingHeader("mesh debug info"))
+		    {
+		      for (int m = 0; m < e->meshCount; m++)
+			{
+			  ImGui::PushID(m);
+			  ImGui::Text("indexCount: %d",e->meshes[m]->rendererData.indexCount);
+			  ImGui::Text("vertCount: %d",e->meshes[m]->vertexCount);
+			  ImGui::Checkbox("Visible", (bool*)&e->meshes[m]->visible);
+			  ImGui::PopID();
+			}
+		    }
+		  if (ImGui::CollapsingHeader("PhysicsInfo"))
+		    {
+		      drawImGuiVec3Text(e->position, "Position");
+		      drawImGuiVec3Text(e->rotation, "Rotation");
+		      drawImGuiVec3Text(e->scale, "Scale");
+		      drawImGuiVec3Text(e->velocity, "Velocity");
+		    }
+
+		  ImGui::Unindent();
+		}
+	      ImGui::PopID();
+	    }
+	}
+      ImGui::Unindent();
+    }
+}  
+
 
 /*   Debug Console     */
 void drawDebugConsole()
@@ -136,81 +328,6 @@ void drawDebugConsole()
 	setVSync(mainWindow.vSyncOn);
     }
 
-  //Lights
-  if (ImGui::CollapsingHeader("Lights"))
-    {
-      ImGui::Indent();
-      
-      //Point Lights
-      if (ImGui::CollapsingHeader("Point Lights"))
-	{
-	  ImGui::PushID("Point Lights");
-	  for (int i = 0; i < RENDERER_POINT_LIGHT_COUNT; i++)
-	    {
-	      ImGui::Text("Light: %d\n", i);
-	      ImGui::PushID(i);           // Push i to the id stack (otherwise stuff affects the same thing
-	      PointLight* p = &globalRenderData.pointLights[i];
-	      {
-		if(ImGui::CollapsingHeader("Position"))
-		  {
-		    ImGui::SliderFloat("X: ", &p->position.x, -10.0, 10.0f);
-		    ImGui::SliderFloat("Y: ", &p->position.y, -10.0, 10.0f);
-		    ImGui::SliderFloat("Z: ", &p->position.z, -10.0, 10.0f);
-		  }
-		if(ImGui::CollapsingHeader("Colour"))
-		  {
-		    ImGui::SliderFloat("R: ", &p->diffuseColour.x, 0.0, 1.0f);
-		    ImGui::SliderFloat("G: ", &p->diffuseColour.y, 0.0, 1.0f);
-		    ImGui::SliderFloat("B: ", &p->diffuseColour.z, 0.0, 1.0f);
-		  }
-		ImGui::SliderFloat("Intensity: ", &p->intensity, 0.0f, 10.0f);
-	      }
-	      ImGui::PopID();
-	    }
-	  ImGui::PopID();
-
-	}
-      //Directional lights
-      if (ImGui::CollapsingHeader("Directional Lights"))
-	{
-	  ImGui::PushID("Directional Lights");
-	  for (int i = 0; i < RENDERER_DIRECTIONAL_LIGHT_COUNT; i++)
-	    {
-	      ImGui::Text("Dir Light: %d\n", i);
-	      ImGui::PushID(i);           // Push i to the id stack (otherwise stuff affects the same thing
-	      DirectionalLight* p = &globalRenderData.dirLights[i];
-	      {
-		if(ImGui::CollapsingHeader("Direction"))
-		  {
-		    ImGui::SliderFloat("X: ", &p->direction.x, -1.0, 1.0f);
-		    ImGui::SliderFloat("Y: ", &p->direction.y, -1.0, 1.0f);
-		    ImGui::SliderFloat("Z: ", &p->direction.z, -1.0, 1.0f);
-		  }
-		if(ImGui::CollapsingHeader("Colour"))
-		  {
-		    ImGui::SliderFloat("R: ", &p->diffuseColour.x, 0.0, 1.0f);
-		    ImGui::SliderFloat("G: ", &p->diffuseColour.y, 0.0, 1.0f);
-		    ImGui::SliderFloat("B: ", &p->diffuseColour.z, 0.0, 1.0f);
-		  }
-	      }
-	      {
-		// Using a Child allow to fill all the space of the window.
-		// It also alows customization
-		ImGui::BeginChild("GameRender");
-		// Get the size of the child (i.e. the whole draw size of the windows).
-		ImVec2 wsize = ImGui::GetWindowSize();
-		// Because I use the texture from OpenGL, I need to invert the V from the UV.
-		ImGui::Image((ImTextureID)globalRenderData.shadowMapTexture, wsize, ImVec2(0, 1), ImVec2(1, 0));
-		ImGui::EndChild();
-	      }
-	      ImGui::PopID();
-	    }
-	  ImGui::PopID();
-	}
-      ImGui::Unindent();	  
-
-    }
-
   //UI Text values
   if (ImGui::CollapsingHeader("Text"))
     {				     
@@ -218,62 +335,8 @@ void drawDebugConsole()
       ImGui::SliderFloat("Size", &fontSize, 0.0f, 720.0f);
     }
 
-  //Entities
-  //TODO: put in separate window
-  if (ImGui::CollapsingHeader("Entities"))
-    {
-      ImGui::Indent();
-      for (int i = 0; i < MAX_REGISTRY_SIZE; i++)
-	{
-	  if (globalEntityRegistry->occupiedIndices[i] && globalEntityRegistry->entities[i].meshes)
-	    {
-	      Entity* e = globalEntityRegistry->entities + i;
-	      ImGui::PushID(e->id);
-	      if (ImGui::CollapsingHeader(e->name))
-		{
-		  ImGui::Text("Pos: %f %f %f", e->position.x, e->position.y, e->position.z);
-		  int indexCount = 0;
-		  int vertexCount = 0;
-		  for (int m = 0; m < e->meshCount; m++)
-		    {
-		      indexCount += e->meshes[m]->rendererData.indexCount;
-		      vertexCount += e->meshes[m]->vertexCount;
-		    }
-		    
-		  ImGui::Text("Vertex Count: %d", vertexCount);
-		  ImGui::Text("Index Count: %d", indexCount);
-		  ImGui::Checkbox("Visible", (bool*)&e->visible);
-		  ImGui::Indent();
-		  if (ImGui::CollapsingHeader("mesh debug info"))
-		    {
-		      for (int m = 0; m < e->meshCount; m++)
-			{
-			  ImGui::PushID(m);
-			  //ImGui::Text("Pos: %f %f %f", e->meshes[m]->position.x, e->meshes[m]->position.y, e->meshes[m]->position.z);
-			  //ImGui::Text("rot: %f %f %f", e->meshes[m]->rotation.x, e->meshes[m]->rotation.y, e->meshes[m]->rotation.z);
-			  //ImGui::Text("scale: %f %f %f", e->meshes[m]->scale.x, e->meshes[m]->scale.y, e->meshes[m]->scale.z);
-			  ImGui::Text("indexCount: %d",e->meshes[m]->rendererData.indexCount);
-			  ImGui::Text("vertCount: %d",e->meshes[m]->vertexCount);
-			  ImGui::Checkbox("Visible", (bool*)&e->meshes[m]->visible);
-			  ImGui::PopID();
-
-			}
-		    }
-		  if (ImGui::CollapsingHeader("PhysicsInfo"))
-		    {
-		      ImGui::Text("Pos: %f %f %f", e->position.x, e->position.y, e->position.z);
-		      ImGui::Text("rot: %f %f %f", e->rotation.x, e->rotation.y, e->rotation.z);
-		      ImGui::Text("scale: %f %f %f", e->scale.x, e->scale.y, e->scale.z);
-		      ImGui::Text("velocity: %f %f %f", e->velocity.x, e->velocity.y, e->velocity.z);
-		    }
-
-		  ImGui::Unindent();
-		}
-	      ImGui::PopID();
-	    }
-	}
-      ImGui::Unindent();
-    }
+  drawDebugLightConsole();
+  drawDebugEntitiesConsole();
       
   ImGui::End();
 
