@@ -54,17 +54,6 @@ vec3 rotateByOrientation(vec3 v, hmm_quaternion q)
   return result;
   
 }
-void printMat4(mat4 in)
-{
-  for (int i = 0; i < 4; i++)
-    {
-      for (int j = 0; j < 4; j ++)
-	{
-	  printf("%f ", in[i][j]);
-	}
-      printf("\n");
-    }
-}
 
 
 hmm_quaternion calculateWQuaternion(hmm_quaternion in)

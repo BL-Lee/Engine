@@ -140,6 +140,7 @@ vec3 midPointFromIndex(int edge)
   }
   }
   vec3 result = {-100000.0f, 100000.0f, 0.0f};
+  return result;
 }
 Entity* marchCubes(float* noiseGrid, vec3i dims)
 {

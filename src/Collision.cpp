@@ -1,5 +1,5 @@
 #include "Mesh.h"
-
+#include "EntityRegistry.h"
 /*************************************
 
 Ray collisions
@@ -142,7 +142,126 @@ u32 rayTriangleCollision(Ray* ray, Triangle* tri, vec3* location)
 }
 
 
+u32 rayMeshCollisionNaive(Ray* ray, Mesh* mesh, mat4* transMatrix, f32* hit, vec3* loc)
+{
+  //CAUTION: DOES NTO WORK WITH SKINNED MESHES YET
+  u32 hasHit = 0;
+  for (int index = 0; index < mesh->rendererData.indexCount; index+=3)
+    {
+      //THESE ARE NOT IN WORLD SPACE YET
+      vec3 positions[3];
+      Vertex* vertices = (Vertex*)mesh->vertices;
+      if (mesh->indices)
+	{
+	  positions[0] =  vertices[mesh->indices[index + 0]].pos;
+	  positions[1] =  vertices[mesh->indices[index + 1]].pos;
+	  positions[2] =  vertices[mesh->indices[index + 2]].pos;
+	}
+      else
+	{
+	  positions[0] = vertices[index + 0].pos;
+	  positions[1] = vertices[index + 1].pos;
+	  positions[2] = vertices[index + 2].pos;
+	}
+      vec4 worldPositions[3] = 
+	{
+	  {positions[0].x,positions[0].y,positions[0].z,1.0},
+	  {positions[1].x,positions[1].y,positions[1].z,1.0},
+	  {positions[2].x,positions[2].y,positions[2].z,1.0}
+	};
+      for (int b = 0; b < 3; b ++)
+	{
+	  worldPositions[b] = *transMatrix * worldPositions[b];
+	  worldPositions[b] /= worldPositions[b].w;
+	}
+		      
+      Triangle tri;
+      tri.v0 = worldPositions[0].xyz;
+      tri.v1 = worldPositions[1].xyz;
+      tri.v2 = worldPositions[2].xyz;
 
+      f32 tHit = FLT_MAX;
+      vec3 tLoc;
+      if (rayTriangleCollision(ray, &tri, &tHit, &tLoc))
+	{
+	  //Bit unintuitive, but this will make it so if you pass in a minimum distance in hit
+	  //It will discard any hits that are above that length
+	  if (tHit < *hit && tHit > 0.0f)
+	    {
+	      *hit = tHit;
+	      *loc = tLoc;
+	      hasHit = 1;
+	    }
+	}
+    }
+  return hasHit;
+}
+
+u32 rayEntityCollisionNaive(Ray* ray, Entity* e, f32* hit, vec3* loc)
+{
+
+  u32 hasHit = 0;
+  
+  mat4 modelMatrix = transformationMatrixFromComponents(e->position, e->scale, e->rotation);
+
+  for (int me = 0; me < e->meshCount; me++)
+    {
+      Mesh* mesh = e->meshes[me];
+      f32 meshHit = FLT_MAX;
+      vec3 meshLoc;
+      if (rayMeshCollisionNaive(ray, mesh, &modelMatrix, &meshHit, &meshLoc))
+	{
+	  //Bit unintuitive, but this will make it so if you pass in a minimum distance in hit
+	  //It will discard any hits that are above that length
+	  if (meshHit < *hit && meshHit > 0.0f)
+	    {
+
+	      *hit = meshHit;
+	      *loc = meshLoc;
+	      hasHit = 1;
+	    }
+	}
+    }
+  return hasHit;
+}
+
+//Actually so fucking bad lmao, goes from 200fps to 70fps when calling 4 times a frame
+u32 rayCastAllNaive(Ray* ray, f32* hit, vec3* loc, Entity** eHit)
+{
+  f32 hitDist = FLT_MAX;
+  vec3 hitLoc;
+  u32 hasHit = 0;
+
+  for (int i = 0; i < MAX_REGISTRY_SIZE; i++)
+    {
+      if (globalEntityRegistry->occupiedIndices[i] && globalEntityRegistry->entities[i].meshes)
+	{
+	  Entity* e = globalEntityRegistry->entities + i;
+	  f32 entityHit = FLT_MAX;
+	  vec3 entityLoc;
+	  if (e->visible)
+	    {
+	      if (rayEntityCollisionNaive(ray, e, &entityHit, &entityLoc))
+		{
+		  if (entityHit < *hit && entityHit > 0.0f)
+		    {
+		      *eHit = e;
+		      *hit = entityHit;
+		      *loc = entityLoc;
+		      hasHit = 1;
+		    }
+		}
+	    }
+	}
+    }
+  return hasHit;
+}
+
+u32 rayCastAllNaive(Ray* ray, f32* hit, vec3* loc)
+{
+  Entity* e;
+  return rayCastAllNaive(ray, hit, loc, &e);
+}
 
 #if 0
 

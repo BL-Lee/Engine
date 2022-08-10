@@ -1,6 +1,8 @@
 #include "Camera.h"
-
+//#include "ImportUtils.cpp"
 //TODO: update pos, rotation
+
+
 void initCamera(Camera* c)
 {
   vec3 cameraTarget = {0.0,0.0,0.0};
@@ -85,8 +87,27 @@ vec3 getCameraPos(Camera* c)
   return pos;
 }
 
-void getFrustumCornersWorldSpace(Camera* c)
+void getFrustumCornersWorldSpace(vec4* viewSpaceCorners, Camera* c)
 {
-  
+  //vec4 viewSpaceCorners[8];
+  //near left bottom
+  viewSpaceCorners[0] = {-1.0, -1.0, -1.0, 1.0};
+  viewSpaceCorners[1] = {1.0, -1.0, -1.0, 1.0};
+  viewSpaceCorners[2] = {-1.0, 1.0, -1.0, 1.0};
+  viewSpaceCorners[3] = {1.0, 1.0, -1.0, 1.0};
+
+  viewSpaceCorners[4] = {-1.0, -1.0, 1.0, 1.0};
+  viewSpaceCorners[5] = {1.0, -1.0, 1.0, 1.0};
+  viewSpaceCorners[6] = {-1.0, 1.0, 1.0, 1.0};
+  viewSpaceCorners[7] = {1.0, 1.0, 1.0, 1.0};
+
+  mat4 projToWorld;
+  mat4 VP = c->projectionMatrix * c->viewMatrix;
+  gluInvertMatrix((float*)&VP, (float*)&projToWorld);
+  for (int i = 0; i < 8; i++)
+    {
+      viewSpaceCorners[i] = projToWorld * viewSpaceCorners[i];
+      viewSpaceCorners[i] /= viewSpaceCorners[i].w;
+    }
 }
 

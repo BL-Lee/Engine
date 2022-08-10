@@ -111,6 +111,7 @@ static int bobFrame = 0;
 static SkinnedAnimation* anim;
 static f32 frameElapsed = 0.0f;
 static SkinnedMesh* bobMesh;
+static Entity* debugGizmoEntity;
 #include "DebugConsole.cpp"
 
 static Font* mainFont;
@@ -134,126 +135,26 @@ Mesh* selectMesh(double mouse_x, double mouse_y)
   ray.direction = (mainCamera.invViewMatrix * one).xyz;
 
   Entity* entityHit = NULL;
-  Mesh* meshHit = NULL;
-  //testRayDir = ray.direction;
-  //testRayOrigin = ray.origin;
-  //printf("origin: %f %f %f\n", ray.origin.x, ray.origin.y, ray.origin.z);
-  //printf("direction: %f %f %f\n", ray.direction.x, ray.direction.y, ray.direction.z);
-
-    for (int i = 0; i < MAX_REGISTRY_SIZE; i++)
+  
+  if (rayCastAllNaive(&ray, &hitDist, &hitLoc, &entityHit))
     {
-      if (globalEntityRegistry->occupiedIndices[i] && globalEntityRegistry->entities[i].meshes)
-	{
-	  Entity* e = globalEntityRegistry->entities + i;
-	  if (e->visible)
-	    {
-	      
-	      mat4 modelMatrix = 
-		{
-		  e->scale.x,    0.0,              0.0,              0.0,
-		  0.0,              e->scale.y,    0.0,              0.0,
-		  0.0,              0.0,              e->scale.z,    0.0,
-		  e->position.x, e->position.y, e->position.z, 1.0
-		};
-	      f32 a = e->rotation.x;
-	      f32 b = e->rotation.y;
-	      f32 c = e->rotation.z;
-	      mat4 rotationXMatrix =
-		{
-		  1, 0, 0, 0,
-		  0, cos(-a), -sin(-a), 0,
-		  0, sin(-a), cos(-a), 0,
-		  0, 0, 0, 1
-		};
-	      mat4 rotationYMatrix =
-		{
-		  cos(-b), 0, sin(-b), 0,
-		  0, 1, 0, 0,
-		  -sin(-b), 0, cos(-b), 0,
-		  0, 0, 0, 1
-		};
-	      mat4 rotationZMatrix =
-		{
-		  cos(-c), -sin(-c), 0, 0,
-		  sin(-c), cos(-c), 0, 0,
-		  0, 0, 1, 0,
-		  0, 0, 0, 1
-		};
-	      mat4 rotationMatrix = rotationXMatrix * rotationYMatrix * rotationZMatrix;
-   
-	      modelMatrix = modelMatrix  * rotationMatrix;		
-	      
-	      for (int me = 0; me < e->meshCount; me++)
-		{
-		  Mesh* mesh = e->meshes[me];
-		  for (int index = 0; index < mesh->rendererData.indexCount; index+=3)
-		    {
-		      //THESE ARE NOT IN WORLD SPACE YET
-		      vec3 positions[3];
-		      Vertex* vertices = (Vertex*)mesh->vertices;
-		      if (mesh->indices)
-			{
-			  positions[0] =  vertices[mesh->indices[index + 0]].pos;
-			  positions[1] =  vertices[mesh->indices[index + 1]].pos;
-			  positions[2] =  vertices[mesh->indices[index + 2]].pos;
-			}
-		      else
-			{
-			  positions[0] = vertices[index + 0].pos;
-			  positions[1] = vertices[index + 1].pos;
-			  positions[2] = vertices[index + 2].pos;
-			}
-		      vec4 worldPositions[3] = 
-			{
-			  {positions[0].x,positions[0].y,positions[0].z,1.0},
-			  {positions[1].x,positions[1].y,positions[1].z,1.0},
-			  {positions[2].x,positions[2].y,positions[2].z,1.0}
-			};
-		      for (int b = 0; b < 3; b ++)
-			{
-			  worldPositions[b] = modelMatrix * worldPositions[b];
-			  worldPositions[b] /= worldPositions[b].w;
-			}
-		      
-		      Triangle tri;
-		      tri.v0 = worldPositions[0].xyz;
-		      tri.v1 = worldPositions[1].xyz;
-		      tri.v2 = worldPositions[2].xyz;
-		      
-		      f32 hit;
-		      vec3 loc;
-		      if (rayTriangleCollision(&ray, &tri, &hit, &loc))
-			{
-
-			  if (hit < hitDist && hit > 0.0f)
-			    {
-			      //printf("HIT! Dist: %f before: %f\n\tloc: %f %f %f\n", hit, hitDist, loc.x, loc.y, loc.z);
-			      hitDist = hit;
-			      hitLoc = loc;
-			      entityHit = e;
-			      meshHit = mesh;
-			    }
-			}
-		    }
-		}
-	    }
-	}
+      entitySelected = entityHit->id;
+      globalRenderData.pointLights[1].position = hitLoc;
+      Entity* pLight = getEntityById(globalRenderData.pointLights[1].entityGizmoID);
+      pLight->position = hitLoc;
     }
-    if (entityHit)
-      {
-	entitySelected = entityHit->id;
-	globalRenderData.pointLights[1].position = entityHit->position;
-	Entity* pLight = getEntityById(globalRenderData.pointLights[1].entityGizmoID);
-	pLight->position = entityHit->position;
-      }
-    return NULL;
+  return NULL;
 }
 
-void selectMeshCallback(GLFWwindow* window, int button, int action, int mods)
-{
+//void selectMeshCallback(GLFWwindow* window, int button, int action, int mods)
+//{
   //  selectMesh(
+//}
+void addDebugGizmo(vec3 location)
+{
+  Entity* dodec = deserializeEntity("res/entities/LightGizmo.entity");
+  dodec->position = location;
 }
-
 
 void renderWindow()
 {
@@ -262,13 +163,15 @@ void renderWindow()
   ImGui_ImplOpenGL3_NewFrame();
   ImGui_ImplGlfw_NewFrame();
 
-
+  //Timing info
   frameElapsed += globalDeltaTime;
   while (frameElapsed >= 1.0f / anim->frameRate) {
     anim->currentFrames[0] = bobMesh->animations->currentFrames[1];
     anim->currentFrames[1] = ( bobMesh->animations->currentFrames[1] + 1 ) % anim->frameCount;
     frameElapsed -= 1.0f / anim->frameRate;
   }
+
+  //TEMP Animation info
   f32 interp = frameElapsed * anim->frameRate;
   anim->currentInterps[0] = 1 - interp;
   anim->currentInterps[1] = interp;
@@ -375,6 +278,15 @@ void processInputs()
       vec3 offset = {-5.0,0.0,0.0};
       rotateCameraLocal(&mainCamera, offset * globalDeltaTime);
     }
+  if (pollInputKey(GLFW_KEY_P))
+    {
+      vec4 corners[8];
+      getFrustumCornersWorldSpace(corners, &mainCamera);
+      for (int i = 0; i < 8; i++)
+	{
+	  addDebugGizmo(corners[i].xyz);
+	}
+    }
 
   //Keyboard Event Handling
   for (int i = 0; i < globalInputBuffer->size; i++)
@@ -475,7 +387,7 @@ int initEngine()
   initCamera(&mainCamera,
 	     (f32)mainWindow.width, (f32)mainWindow.height,
 	     60.0f,
-	     0.001f,20.0f,
+	     0.001f,30.0f,
 	     camPos, camDir);  
   setPerspectiveMatrix(&mainCamera);
 
@@ -501,7 +413,8 @@ int initEngine()
   //SkinnedMesh* spiderMesh = loadFBX("res/models/Spider.fbx");
 
   Entity* spider = requestNewEntity("spider");
-
+  Entity* debugGizmoEntity = requestNewEntity("debugGizmo");
+  //debugGizmoEntity = gizmos.id;
   /*
   for (int i = 0; i < spiderMesh->meshCount; i++)
     {

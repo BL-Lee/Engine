@@ -17,6 +17,18 @@ saucy_defer<F> defer_func(F f) {
 #define DEFER_3(x)    DEFER_2(x, __COUNTER__)
 #define defer(code)   auto DEFER_3(_defer_) =     defer_func([&](){code;})
 */
+void printMat4(mat4 in)
+{
+  for (int i = 0; i < 4; i++)
+    {
+      for (int j = 0; j < 4; j ++)
+	{
+	  printf("%f ", in[i][j]);
+	}
+      printf("\n");
+    }
+}
+
 vec3 loadVec3Line(const char* tagName, const char* buffer)
 {
   vec3 values;

@@ -3484,5 +3484,43 @@ void decomposeTransform(hmm_mat4 in, hmm_vec3* pos, hmm_vec3* scale, hmm_quatern
   *rot = Mat4ToQuaternion(in);  
 }
 
+hmm_mat4 transformationMatrixFromComponents(hmm_vec3 position, hmm_vec3 scale, hmm_vec3 rotation)
+{
+  hmm_mat4 modelMatrix = 
+    {
+      scale.x,    0.0,              0.0,              0.0,
+      0.0,              scale.y,    0.0,              0.0,
+      0.0,              0.0,              scale.z,    0.0,
+      position.x, position.y, position.z, 1.0
+    };
+  float a = rotation.x;
+  float b = rotation.y;
+  float c = rotation.z;
+  hmm_mat4 rotationXMatrix =
+    {
+      1, 0, 0, 0,
+      0, cos(-a), -sin(-a), 0,
+      0, sin(-a), cos(-a), 0,
+      0, 0, 0, 1
+    };
+  hmm_mat4 rotationYMatrix =
+    {
+      cos(-b), 0, sin(-b), 0,
+      0, 1, 0, 0,
+      -sin(-b), 0, cos(-b), 0,
+      0, 0, 0, 1
+    };
+  hmm_mat4 rotationZMatrix =
+    {
+      cos(-c), -sin(-c), 0, 0,
+      sin(-c), cos(-c), 0, 0,
+      0, 0, 1, 0,
+      0, 0, 0, 1
+    };
+  hmm_mat4 rotationMatrix = rotationXMatrix * rotationYMatrix * rotationZMatrix;
+   
+  return modelMatrix * rotationMatrix;		
+
+}
 
 #endif /* HANDMADE_MATH_MENTATION */

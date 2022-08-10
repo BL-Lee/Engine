@@ -41,6 +41,6 @@ void rotateCameraLocal(Camera* c, vec3 amount);
 void rotateCameraGlobal(Camera* c, vec3 amount);
 bool gluInvertMatrix(const float m[16], float invOut[16]);
 vec3 getCameraPos(Camera* c);
-
+void getFrustumCornersWorldSpace(vec4* viewSpaceCorners, Camera* c);
 
 #endif

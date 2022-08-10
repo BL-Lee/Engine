@@ -130,7 +130,7 @@ void drawDebugLightConsole()
     }
 }
 
-void drawDebugEntitiesConsole()
+void drawDebugEntityConsole()
 {
   u32 entityIndex = 0;
     //Entities
@@ -141,8 +141,8 @@ void drawDebugEntitiesConsole()
       if (globalEntityRegistry->occupiedIndices[entityIndex] && globalEntityRegistry->entities[entityIndex].meshes)
 	{
 	  Entity* e = globalEntityRegistry->entities + entityIndex;
-	  ImGui::PushID(e->id);	  
-	  ImGui::Text("Pos: %f %f %f", e->position.x, e->position.y, e->position.z);
+	  ImGui::PushID(e->id);
+	  drawImGuiVec3Text(e->position, "Pos");
 	  int indexCount = 0;
 	  int vertexCount = 0;
 	  for (int m = 0; m < e->meshCount; m++)
@@ -181,7 +181,7 @@ void drawDebugEntitiesConsole()
   ImGui::Unindent();
 }
 
-void drawDebugEntityConsole()
+void drawDebugEntitiesConsole()
 {
   if (ImGui::CollapsingHeader("Entities"))
     {
@@ -194,7 +194,7 @@ void drawDebugEntityConsole()
 	      ImGui::PushID(e->id);
 	      if (ImGui::CollapsingHeader(e->name))
 		{
-		  ImGui::Text("Pos: %f %f %f", e->position.x, e->position.y, e->position.z);
+		  drawImGuiVec3Text(e->position, "Pos");
 		  int indexCount = 0;
 		  int vertexCount = 0;
 		  for (int m = 0; m < e->meshCount; m++)
@@ -281,7 +281,7 @@ void drawDebugConsole()
   if (ImGui::CollapsingHeader("Camera"))
     {
       vec3 pos = getCameraPos(&mainCamera);
-      ImGui::Text("Camera Position: x: %f y: %f z: %f", pos.x, pos.y, pos.z);             
+      drawImGuiVec3Text(pos, "Camera Position");
     }
 
   //Renderer info
