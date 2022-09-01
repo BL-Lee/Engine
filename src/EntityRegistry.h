@@ -1,6 +1,8 @@
 #ifndef ENTITY_REGISTRY_HEADER
 #define ENTITY_REGISTRY_HEADER
 
+#include "Collision.h"
+#include "Physics.h"
 struct Entity
 {
   u32 id;
@@ -15,6 +17,12 @@ struct Entity
   char* fragShader;
   u32 meshCount;
   bool visible;
+
+
+  float mass;
+  bool physicsEnabled;
+  bool gravityEnabled;
+  Collider collider;
 };
 
 #define MAX_REGISTRY_SIZE 2048

@@ -118,7 +118,6 @@ SkinnedMesh* loadMD5Mesh(const char* fileName)
       }
       else if (strstr(buffer, "joints")) {
 	Assert(sm->jointCount != -1);
-	printf("enterin joints\n");
 	for (int j = 0; j < sm->jointCount; j++)
 	  {
 	    Assert(fgets(buffer, 512, fileHandle));

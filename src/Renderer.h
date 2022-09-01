@@ -135,6 +135,8 @@ struct RendererData
   vec3 meshTransforms[RENDERER_MESH_DRAW_COUNT * 3];
   mat4 meshModelMatrices[RENDERER_MESH_DRAW_COUNT];
   u32 meshesToDrawCount;
+  
+  Mesh* debugGeometryMesh;
 };
 
 struct VertexLayoutComponent

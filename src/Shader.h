@@ -6,7 +6,7 @@ struct Shader {
   char* data;
 };
 
-u32 loadShader(const char* file, u32 type);
+Shader* loadShader(const char* file, u32 type);
 void deleteShader(Shader*);
 void compileShader(Shader*);
 

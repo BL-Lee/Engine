@@ -193,7 +193,13 @@ void renderWindow()
 		}
 	    }
 	}
-    }  
+    }
+  //drawMesh(galRenderData.debugGeometryMesh, {0.0,0.0,0.0},{0.0,0.0,0.0},{1.0,1.0,1.0});
+  //addDebugRect({0.0,0.0,0.0},{1.0, 0.0, 1.0}, {0.0,1.0,1.0}, {0.0,1.0,0.0});
+  addDebugLine({1.0,-1.0,0.0},{0.0, 10.0, 0.0});
+  //glBindVertexArray(globalRenderData.debugGeometryMesh->rendererData.vertexArrayKey);
+  //VertexBuffer
+
   endGLTimer(&GPUMeshTimer);
     
   //UI
@@ -210,6 +216,7 @@ void renderWindow()
     }
   rendererEndScene();
   endGLTimer(&GPUUITimer);
+
 
   //Draw with frame buffer
   swapToFrameBufferAndDraw();
@@ -327,6 +334,27 @@ void processInputs()
   clearInputBuffer();
 }
 
+void checkCollisions(Entity* e, int startingIndex)
+{
+  for (int i = startingIndex; i < MAX_REGISTRY_SIZE; i++)
+    {
+      if (globalEntityRegistry->occupiedIndices[i] && globalEntityRegistry->entities[i].meshes)
+	{
+	  Entity* other = globalEntityRegistry->entities + i;	  
+	  if (other != e && other->visible && other->physicsEnabled)
+	    {
+	      if (AABBColliding(e->collider.aabb, other->collider.aabb))
+		{
+		  e->velocity *= -1;
+		  //e->visible = false;
+		  //other->visible = false;
+		}
+	    }
+	}
+    } 
+  
+}
+
 //Update Physics
 void physicsUpdate()
 {
@@ -335,17 +363,28 @@ void physicsUpdate()
       if (globalEntityRegistry->occupiedIndices[i] && globalEntityRegistry->entities[i].meshes)
 	{
 	  Entity* e = globalEntityRegistry->entities + i;
-	  if (e->visible)
+	  if (e->visible && e->physicsEnabled)
 	    {
-	      for (int j = 0; j < e->meshCount; j++)
+	      setEntityAABBCollider(e);
+	      addDebugLineBox(e->collider.aabb.min, e->collider.aabb.max);
+	    }
+	}
+    }
+  for (int i = 0; i < MAX_REGISTRY_SIZE; i++)
+    {
+      if (globalEntityRegistry->occupiedIndices[i] && globalEntityRegistry->entities[i].meshes)
+	{
+	  Entity* e = globalEntityRegistry->entities + i;
+
+	  if (e->visible && e->physicsEnabled)
+	    {
+	      checkCollisions(e, i + 1);
+	      if (e->gravityEnabled)
 		{
-		  Mesh* mesh = e->meshes[j];
-		  if (mesh->visible)
-		    {
-		      e->position += e->velocity * globalDeltaTime;
-		      e->rotation += e->angularVelocity * globalDeltaTime;
-		    }
+		  e->velocity.y -= 9.80f * globalDeltaTime;
 		}
+	      e->position += e->velocity * globalDeltaTime;
+	      e->rotation += e->angularVelocity * globalDeltaTime;
 	    }
 	}
     } 
@@ -443,7 +482,7 @@ int initEngine()
   //bobMesh = loadMD5Mesh("res/models/Spider.md5mesh");
   //anim = loadMD5Anim("res/models/Spider.md5anim", bobMesh);
 
-  bob = requestNewEntity("bob");
+  /*   bob = requestNewEntity("bob");
   bob->position.y -= 4.0f;
   bob->rotation.x = -3.14 / 2;
   bob->meshes = bobMesh->meshes;
@@ -452,10 +491,12 @@ int initEngine()
   for (int i = 0; i < bobMesh->meshCount; i++)
     {      
       calculateNormals(bobMesh->meshes[i]);
-      addMesh(bobMesh->meshes[i], "res/shaders/skinnedBasicLightVertex.glsl", "res/shaders/basicLightFrag.glsl", skinnedDefaultlayout, 6);
+       addMesh(bobMesh->meshes[i], "res/shaders/skinnedBasicLightVertex.glsl", "res/shaders/basicLightFrag.glsl", skinnedDefaultlayout, 6);
       loadMaterial("res/materials/defaultMaterial.mat", &bob->meshes[i]->material);
     }
+    setEntityAABBCollider(bob);*/
   /*
+
   //TEMP: Generate cave
   vec3i dims = {16,16,16};
   float* grid = generateCaveGrid(dims);
@@ -465,7 +506,7 @@ int initEngine()
   loadMaterial("res/materials/defaultMaterial.mat", &cave->meshes[0]->material);
   */
   loadScene("res/scenes/testImportModel.scene");
-  
+  //ploadScene("res/scenes/blankScene.scene");
   return 0;
 }
 void shutDownEngine()

@@ -103,6 +103,8 @@ Entity* deserializeEntity(const char* filename)
   entity->rotation = zero;
   entity->velocity = zero;
   entity->angularVelocity = zero;
+  entity->physicsEnabled = true;
+  entity->gravityEnabled = false;
   entity->meshes = NULL;
   entity->meshCount = 0;
   entity->visible = true;
@@ -182,6 +184,7 @@ Entity* deserializeEntity(const char* filename)
 	  addMesh(entity->meshes[i], entity->vertShader, entity->fragShader);
 	}
     }
+  setEntityAABBCollider(entity);
   return entity;
 }
 

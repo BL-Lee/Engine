@@ -129,7 +129,7 @@ void drawDebugLightConsole()
       ImGui::Unindent();	     
     }
 }
-
+/*
 void drawDebugEntityConsole()
 {
   u32 entityIndex = 0;
@@ -154,6 +154,8 @@ void drawDebugEntityConsole()
 	  ImGui::Text("Vertex Count: %d", vertexCount);
 	  ImGui::Text("Index Count: %d", indexCount);
 	  ImGui::Checkbox("Visible", (bool*)&e->visible);
+
+
 	  ImGui::Indent();
 	  if (ImGui::CollapsingHeader("mesh debug info"))
 	    {
@@ -168,6 +170,8 @@ void drawDebugEntityConsole()
 	    }
 	  if (ImGui::CollapsingHeader("PhysicsInfo"))
 	    {
+	      ImGui::Checkbox("Gravity", (bool*)&e->gravityEnabled);
+	      ImGui::Checkbox("Physics Enabled", (bool*)&e->physicsEnabled);
 	      drawImGuiVec3Text(e->position, "Position");
 	      drawImGuiVec3Text(e->rotation, "Rotation");
 	      drawImGuiVec3Text(e->scale, "Scale");
@@ -180,7 +184,7 @@ void drawDebugEntityConsole()
     }
   ImGui::Unindent();
 }
-
+*/
 void drawDebugEntitiesConsole()
 {
   if (ImGui::CollapsingHeader("Entities"))
@@ -220,10 +224,19 @@ void drawDebugEntitiesConsole()
 		    }
 		  if (ImGui::CollapsingHeader("PhysicsInfo"))
 		    {
+		      ImGui::Checkbox("Gravity", (bool*)&e->gravityEnabled);
+		      ImGui::Checkbox("Physics Enabled", (bool*)&e->physicsEnabled);
+	      
 		      drawImGuiVec3Text(e->position, "Position");
 		      drawImGuiVec3Text(e->rotation, "Rotation");
 		      drawImGuiVec3Text(e->scale, "Scale");
 		      drawImGuiVec3Text(e->velocity, "Velocity");
+		    }
+		  if (ImGui::CollapsingHeader("CollisionInfo"))
+		    {
+		      ImGui::Text("AABB");
+		      drawImGuiVec3Text(e->collider.aabb.min, "min");
+		      drawImGuiVec3Text(e->collider.aabb.max, "max");
 		    }
 
 		  ImGui::Unindent();

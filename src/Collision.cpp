@@ -263,6 +263,82 @@ u32 rayCastAllNaive(Ray* ray, f32* hit, vec3* loc)
   return rayCastAllNaive(ray, hit, loc, &e);
 }
 
+/*****************************
+
+
+
+ *****************************/
+
+void setEntityAABBCollider(Entity* e)
+{
+  mat4 transformation = transformationMatrixFromComponents(e->position, e->scale, e->rotation);
+  vec3 max = {-FLT_MAX, -FLT_MAX, -FLT_MAX};
+  vec3 min = {FLT_MAX, FLT_MAX, FLT_MAX};
+  for (int i = 0; i < e->meshCount; i++)
+    {
+      Mesh* mesh = e->meshes[i];
+      for (int j = 0; j < mesh->vertexCount; j++)
+	{
+	  vec3 vertexPos;
+	  if (mesh->skinnedMesh)
+	    {
+	      SkinnedVertex* vertex = &((SkinnedVertex*)(mesh->vertices))[j]; //TODO get world position;
+	      SkinnedMesh* skinnedMesh = (SkinnedMesh*)mesh->skinnedMesh;
+	      SkinnedAnimation* anim = skinnedMesh->animations;
+	      vec4 finalVertex = { 0.0, 0.0, 0.0, 0.0 };
+	      for (int l = 0; l < 4; l++)
+		{
+		  vec4 zero = { skinnedMesh->tempPositions[i][j], 1.0 };
+		  vec4 newPos = (anim->compositeMatrices[(int)vertex->jointIndices[l]] * zero) * vertex->jointWeights[l];
+		  finalVertex += newPos;
+		}
+
+	      vertexPos = finalVertex.xyz / finalVertex.w;//((SkinnedVertex*)(mesh->vertices))[j].pos; //TODO get world position
+	    }
+	  else
+	    {
+	      vec4 pos = {((Vertex*)(mesh->vertices))[j].pos,1};
+	      vertexPos = (transformation * pos).xyz;
+	    }
+
+	  for (int axis = 0; axis < 3; axis++)
+	    {
+	      if (vertexPos[axis] < min[axis])
+		{
+		  min[axis] = vertexPos[axis];
+		}
+	      if (vertexPos[axis] > max[axis])
+		{
+		  max[axis] = vertexPos[axis];
+		}
+	    }
+	}
+    }
+  vec4 min4 = {min.x, min.y, min.z, 1};
+  vec4 max4 = {max.x, max.y, max.z, 1};
+  e->collider.aabb.max = max;
+  e->collider.aabb.min = min;
+}
+
+bool AABBColliding(AABBCollider a, AABBCollider b)
+{/*
+  bool colliding = 1;
+  for (int axis = 0; axis < 3; axis++)
+    {
+      colliding &= (first.max[axis] > second.min[axis])
+	|| (first.min[axis] < second.min[axis]);
+    }
+    return colliding;*/
+  return a.min.x <= b.max.x &&
+    a.max.x >= b.min.x &&
+    a.min.y <= b.max.y &&
+    a.max.y >= b.min.y &&
+    a.min.z <= b.max.z &&
+    a.max.z >= b.min.z;
+}
+
+
+
 #if 0
 
 /*****************************

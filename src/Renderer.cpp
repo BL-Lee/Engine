@@ -179,11 +179,104 @@ void initShadowMapInfo()
   
   globalRenderData.depthShader = loadAndValidateShaderPair("res/shaders/screenShadervert.glsl",
 							   "res/shaders/depthFrag.glsl");
+}
+
+void initDebugGeometryMesh()
+{
+  Mesh* m = (Mesh*)calloc(1, sizeof(Mesh));
+  globalRenderData.meshesToDraw[0] = m;
+  globalRenderData.debugGeometryMesh = globalRenderData.meshesToDraw[0];
+  globalRenderData.meshesToDrawCount = 1;
+  m->visible = true;
+  u32 totalVertexCount = 6 * 512;
+  m->vertices = malloc(sizeof(Vertex) * totalVertexCount);
+  globalRenderData.meshTransforms[0] = {0.0,0.0,0.0};
+  globalRenderData.meshTransforms[1] = {0.0,0.0,0.0};
+  globalRenderData.meshTransforms[2] = {1.0,1.0,1.0};  
+
+  //m->indices = (u32*) malloc(sizeof(u32) * totalVertexCount);
+
+  m->vertexCount = totalVertexCount;
+  addMesh(m, "res/shaders/normalVisVertex.glsl", "res/shaders/normalVisFrag.glsl");
+  //addMesh(m, "res/shaders/basicLightVertex.glsl", "res/shaders/basicLightFrag.glsl");
+  m->vertexCount = 0;
+  m->rendererData.indexCount = 0;
+}
+
+
+void addDebugRect(vec3 c0, vec3 c1, vec3 c2, vec3 c3)
+{
+  float thickness = 0.1f;
+  Vertex* vertices = (Vertex*)globalRenderData.debugGeometryMesh->vertices;
+  Mesh* m = globalRenderData.debugGeometryMesh;
+
+  vertices[m->vertexCount + 0].pos = c0;
+  vertices[m->vertexCount + 1].pos = c1;
+  vertices[m->vertexCount + 2].pos = c2;
+  
+  vertices[m->vertexCount + 3].pos = c0;
+  vertices[m->vertexCount + 4].pos = c2;
+  vertices[m->vertexCount + 5].pos = c3;
+
+  for (int i =0 ; i< 6; i++)
+    {
+      vertices[m->vertexCount + i].normal = {0.0, 1.0, 0.0};
+      //m->indices[m->vertexCount + i] = m->vertexCount + i;
+    }
+  m->rendererData.indexCount += 6;
+  m->vertexCount += 6;
+}
+void addDebugLine(vec3 min, vec3 max)
+{
+  vec3 dir = Normalize(min - max);
+  vec3 orth = Cross(dir, Normalize(mainCamera.pos - max));
+  vec3 corners[4];
+  float t = 0.005f;
+  
+  corners[0] = min - orth * t;
+  corners[1] = min + orth * t;
+  corners[2] = max + orth * t;
+  corners[3] = max - orth * t;
+
+  addDebugRect(corners[0], corners[1], corners[2], corners[3] );
+}
+void addDebugLineBox(vec3 min, vec3 max)
+{
+  vec3 corners[8];
+  corners[0] = {min.x, min.y, min.z};
+  corners[1] = {min.x, min.y, max.z};
+  corners[2] = {min.x, max.y, min.z};
+  corners[3] = {min.x, max.y, max.z};
+
+  corners[4] = {max.x, min.y, min.z};
+  corners[5] = {max.x, min.y, max.z};
+  corners[6] = {max.x, max.y, min.z};
+  corners[7] = {max.x, max.y, max.z};
+  
+  addDebugLine(corners[0], corners[1]);
+  addDebugLine(corners[0], corners[2]);
+  addDebugLine(corners[3], corners[2]);
+  addDebugLine(corners[3], corners[1]);
+
+  addDebugLine(corners[4], corners[5]);
+  addDebugLine(corners[4], corners[6]);
+  addDebugLine(corners[7], corners[6]);
+  addDebugLine(corners[7], corners[5]);
+
+  addDebugLine(corners[0], corners[4]);
+  addDebugLine(corners[1], corners[5]);
+  addDebugLine(corners[2], corners[6]);
+  addDebugLine(corners[3], corners[7]);
 
 
 }
 
-
+void updateDebugLineBuffers()
+{
+  // glGenBuffers(1, &globalRenderData.debugGeometryMesh->rendererData.vertexBufferKey);
+  glBindBuffer(GL_ARRAY_BUFFER, globalRenderData.debugGeometryMesh->rendererData.vertexBufferKey);
+  glBufferData(GL_ARRAY_BUFFER, sizeof(Vertex) * globalRenderData.debugGeometryMesh->vertexCount, globalRenderData.debugGeometryMesh->vertices, GL_DYNAMIC_DRAW);
+}
 
 void initRenderer()
 {  
@@ -204,7 +297,9 @@ void initRenderer()
   globalRenderData.wireFrameMode = 0;
   globalRenderData.initialized = 1;
 
-  globalRenderData.meshesToDrawCount = 0;
+  globalRenderData.meshesToDrawCount = 1;
+
+  
 
   globalRenderData.exposure = 0.2f;
   globalRenderData.enabledScreenShader = 0;
@@ -286,7 +381,8 @@ void initRenderer()
   u8* data = loadTexture(&globalRenderData.blueNoiseTex, "res/textures/LDR_RGB1_0.png", GL_REPEAT, GL_NEAREST);
   errCheck();
   free(data);
-  
+
+  initDebugGeometryMesh();
   errCheck();
 }
 
@@ -322,18 +418,18 @@ void addMesh(Mesh* mesh, const char* vertexShader, const char* fragmentShader, V
   RendererMeshData* meshData = &mesh->rendererData;
   //create shader program
   u32 program = glCreateProgram();
-  u32 vs = loadShader(vertexShader, GL_VERTEX_SHADER);
-  u32 fs = loadShader(fragmentShader, GL_FRAGMENT_SHADER);
+  Shader* vs = loadShader(vertexShader, GL_VERTEX_SHADER);
+  Shader* fs = loadShader(fragmentShader, GL_FRAGMENT_SHADER);
 
   //link program
   u32 totalLayoutSize = 0;
-  glAttachShader(program, vs);
+  glAttachShader(program, vs->key);
   for (int i = 0; i < layoutCount; i++)
     {
       glBindAttribLocation(program, layout[i].location, layout[i].name);
       totalLayoutSize += layout[i].size;
     }
-  glAttachShader(program, fs);
+  glAttachShader(program, fs->key);
 
   validateShaderCompilation(vs);
   validateShaderCompilation(fs);
@@ -389,8 +485,10 @@ void addMesh(Mesh* mesh, const char* vertexShader, const char* fragmentShader, V
     }
 
   
-  glDetachShader(program, vs);
-  glDetachShader(program, fs);
+  glDetachShader(program, vs->key);
+  glDetachShader(program, fs->key);
+  deleteShader(vs);
+  deleteShader(fs);
  }
 
 void addMesh(Mesh* mesh, const char* vertexShader, const char* fragmentShader)
@@ -430,12 +528,15 @@ void rendererEndScene()
   //Iterate through all shaders to draw
   for (int i = RENDERER_BUFFER_COUNT - 1; i >= 0; i--)
     {
+      //calculate how much vertex data to send
+      uint32_t dataSize = (u8*)globalRenderData._vertexBufferPtr[i] - (u8*)globalRenderData._vertexBufferBase[i];
+      if (dataSize == 0) continue; //continue if no vertices to draw
+      
       setRendererShaderMode(i);
       glUseProgram(globalRenderData.shaderProgramKey);
       glBindVertexArray(globalRenderData.vertexArrayKey);
       
-      //calculate how much vertex data to send
-      uint32_t dataSize = (u8*)globalRenderData.vertexBufferPtr - (u8*)globalRenderData.vertexBufferBase; 
+      
       glBindBuffer(GL_ARRAY_BUFFER, globalRenderData.vertexBufferKey);
       glBufferData(GL_ARRAY_BUFFER, dataSize, globalRenderData.vertexBufferBase, GL_DYNAMIC_DRAW);
 
@@ -559,7 +660,7 @@ void shadowMapPass(mat4* lightMatrix)
 
       location = glGetUniformLocation(globalRenderData.shadowMapShader, "lightMatrix");
       glUniformMatrix4fv(location, 1, GL_FALSE, (float*)lightMatrix);
-
+      errCheck();      
 
       glDrawElements(GL_TRIANGLES, mesh->rendererData.indexCount, GL_UNSIGNED_INT, NULL);
       errCheck();      
@@ -661,6 +762,7 @@ void flushMeshesAndRender()
   mat4 lightProjection = globalRenderData.dirLights[0].shadowMatrix;
   mat4 lightMatrix = lightProjection * LookAt(lightPos, target, up);
 
+  updateDebugLineBuffers();
   shadowMapPass(&lightMatrix);
   //Reset to other frame buffer ot draw geometry
   glCullFace(GL_BACK);
@@ -669,7 +771,9 @@ void flushMeshesAndRender()
   
   renderPass(&lightMatrix);  
 
-  globalRenderData.meshesToDrawCount = 0;
+  globalRenderData.meshesToDrawCount = 1;
+  globalRenderData.debugGeometryMesh->vertexCount = 0;
+  globalRenderData.debugGeometryMesh->rendererData.indexCount = 0;
 }
 
 

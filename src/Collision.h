@@ -25,8 +25,9 @@ struct Triangle
 };
 struct AABBCollider
 {
-  vec3 center;
-  vec3 size; //each component is "radius"
+  //vec3 center;
+  //vec3 size; //each component is "radius"
+  vec3 min, max;
 };
 struct Collider
 {

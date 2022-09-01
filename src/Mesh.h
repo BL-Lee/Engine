@@ -57,14 +57,12 @@ struct Mesh
   
   bool visible;
   u32 vertexCount;
-  //Vertex* vertices;
   void* vertices;
-
+  
   u32* indices;
   
   RendererMeshData rendererData;
   Material material;
-  Collider collider;
 
   void* skinnedMesh;
 };

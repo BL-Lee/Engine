@@ -4,3 +4,6 @@
 [submodule "dependencies/msdf-atlas-gen"]
 	path = dependencies/msdf-atlas-gen
 	url = https://github.com/Chlumsky/msdfgen
+[submodule "dependencies/bullet3"]
+	path = dependencies/bullet3
+	url = https://github.com/bulletphysics/bullet3

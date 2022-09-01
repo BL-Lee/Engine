@@ -50,7 +50,7 @@ char* loadRawShaderFile(const char* file)
   return buffer;  
 }
 
-u32 loadShader(const char* file, u32 type) {
+Shader* loadShader(const char* file, u32 type) {
 
   char* buffer = loadRawShaderFile(file);
 
@@ -67,7 +67,7 @@ u32 loadShader(const char* file, u32 type) {
   glShaderSource(s->key, 1, &s->data, NULL);
   glCompileShader(s->key);
   
-  return s->key;
+  return s;
 }
 
 void deleteShader(Shader* S) {

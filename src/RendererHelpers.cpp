@@ -4,22 +4,23 @@
   Shader functions
 
  */
-void validateShaderCompilation(u32 shaderID)
+void validateShaderCompilation( Shader* shader )
 {
 #if DEBUG_GL
   char log[8000];
   int logLength;
   int status;
-  glGetShaderiv(shaderID, GL_COMPILE_STATUS, &status);
+  glGetShaderiv(shader->key, GL_COMPILE_STATUS, &status);
   if (status != GL_TRUE)
     {
-      glGetShaderInfoLog( shaderID,
+      glGetShaderInfoLog( shader->key,
 			  8000,
 			  &logLength,
 			  log);
+      fprintf(stderr, "SHADER: %s\n", shader->data);
       fprintf(stderr, "ERROR: SHADER COMPILATION FAILED\n");
-      printf("Shader log length: %d\n", logLength);
-      printf("%s\n", log);
+      fprintf(stderr, "Shader log length: %d\n", logLength);
+      fprintf(stderr, "%s\n", log);
       Assert(0);
     }
 #endif
@@ -49,20 +50,23 @@ void validateShaderLink(u32 programID)
 u32 loadAndValidateShaderPair(const char* vert, const char* frag)
 {
   u32 program = glCreateProgram();
-  u32 vs = loadShader(vert, GL_VERTEX_SHADER);
+  Shader* vs = loadShader(vert, GL_VERTEX_SHADER);
   validateShaderCompilation(vs);
-  u32 fs = loadShader(frag, GL_FRAGMENT_SHADER);
+  Shader* fs = loadShader(frag, GL_FRAGMENT_SHADER);
   validateShaderCompilation(fs);
       
 
   //link program
-  glAttachShader(program, vs);
-  glAttachShader(program, fs);
+  glAttachShader(program, vs->key);
+  glAttachShader(program, fs->key);
   glLinkProgram(program);           
   glValidateProgram(program);
       
   validateShaderLink(program);
 
+  deleteShader(vs);
+  deleteShader(fs);  
+  
   return program;
 }
 

@@ -234,7 +234,6 @@ Mesh** deserializeMeshes(const char* fileInput, u32* meshCount)
     {
       meshes[i] = (Mesh*)calloc(sizeof(Mesh), 1);
       meshes[i]->visible = true;
-
       //Load vertices
       meshes[i]->vertices = malloc(sizeof(Vertex) * mHeaders[i].totalVertices);
       meshes[i]->vertexCount = mHeaders[i].totalVertices;
