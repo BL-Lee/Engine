@@ -1,5 +1,30 @@
 #include "DebugConsole.h"
 
+void initGeneralDebugInfo()
+{
+  globalDebugData.wrappedGraphIndex = 0;
+  for (int i = 0 ; i < DEBUG_TIMING_HISTORY_LENGTH; i++)
+    {
+      globalDebugData.msHistory[i] = 0;
+      globalDebugData.fpsHistory[i] = 0;
+      globalDebugData.xAxis[i] = i;
+    }
+  globalDebugData.weightedMS = 0.0f;
+  globalDebugData.weightedFPS = 0.0f;
+  globalDebugData.showAABB = true;
+}
+
+void updateGeneralDebugInfo()
+{
+  f32 currMS = globalDeltaTime / globalTimeScale;
+  f32 currFPS = 1.0f / currMS;
+  globalDebugData.msHistory[globalDebugData.wrappedGraphIndex] = currMS;
+  globalDebugData.fpsHistory[globalDebugData.wrappedGraphIndex] = currFPS;
+  globalDebugData.wrappedGraphIndex = (globalDebugData.wrappedGraphIndex + 1) % DEBUG_TIMING_HISTORY_LENGTH;
+
+  globalDebugData.weightedMS = globalDebugData.weightedMS * 0.95 + currMS * 0.05;
+  globalDebugData.weightedFPS = globalDebugData.weightedFPS * 0.95 + currFPS * 0.05;
+}
 
 /*     GL Timers     */
 void initGLTimer(GLTimer* timer)
@@ -189,6 +214,7 @@ void drawDebugEntitiesConsole()
 {
   if (ImGui::CollapsingHeader("Entities"))
     {
+      ImGui::Checkbox("Show AABBs", (bool*)&globalDebugData.showAABB);
       ImGui::Indent();
       for (int i = 0; i < MAX_REGISTRY_SIZE; i++)
 	{
@@ -264,26 +290,47 @@ void drawDebugConsole()
 	}
     }
 
-  glClear(GL_DEPTH_BUFFER_BIT);
+  glClear(GL_DEPTH_BUFFER_BIT);  
   
   //Anything that should be drawn ontop of everything
   Entity* arrows = getEntityById(translationArrows);
   for (int i = 0; i < arrows->meshCount; i++)
     {
       //drawMesh(arrows->meshes[i], arrows->position, arrows->rotation, arrows->scale);
-    }
+    }  
     
   ImGui::NewFrame();
   ImGui::Begin("Editor");
 
   ImGui::Text("Frame: %d, %.2f%%", anim->currentFrames[0], anim->currentInterps[0]);
-      ImGui::Text("Frame: %d, %.2f%%", anim->currentFrames[1], anim->currentInterps[1]);
+  ImGui::Text("Frame: %d, %.2f%%", anim->currentFrames[1], anim->currentInterps[1]);
   //Timing data
+  updateGeneralDebugInfo();
   if (ImGui::CollapsingHeader("TimingData"))
     {
+
+      f32 rawDeltaTime = globalDeltaTime / globalTimeScale;
+
+      if (ImPlot::BeginPlot("FPS", ImVec2(-1, 150))) {
+        ImPlot::SetupAxes("Timestep","FPS", ImPlotAxisFlags_Lock, ImPlotAxisFlags_AutoFit );
+	ImPlot::SetupAxesLimits(0,DEBUG_TIMING_HISTORY_LENGTH,0,120);
+	ImPlot::PlotLine("FPS", globalDebugData.xAxis, globalDebugData.fpsHistory, DEBUG_TIMING_HISTORY_LENGTH);
+        ImPlot::EndPlot();
+      }
+      if (ImPlot::BeginPlot("MS", ImVec2(-1, 150))) {
+        ImPlot::SetupAxes("Timestep","MS", ImPlotAxisFlags_Lock, ImPlotAxisFlags_AutoFit );
+	ImPlot::SetupAxesLimits(0,DEBUG_TIMING_HISTORY_LENGTH,0,120);
+	ImPlot::PlotLine("FPS", globalDebugData.xAxis, globalDebugData.msHistory, DEBUG_TIMING_HISTORY_LENGTH);
+        ImPlot::EndPlot();
+      }
+      
+      ImGui::Text("Weighted MS: %.0f", globalDebugData.weightedMS);
+      ImGui::Text("Weighted FPS: %f", globalDebugData.weightedFPS);
+      
       ImGui::Text("Delta Time Scale: %f", globalTimeScale);
-      ImGui::Text("Delta Time: %f", globalDeltaTime);
-      ImGui::Text("fps: %.0f", 1 / globalDeltaTime);
+      ImGui::Text("Raw Delta Time: %f", rawDeltaTime);
+      ImGui::Text("Raw FPS: %.0f", 1 / rawDeltaTime);
+      
       ImGui::Text("Total GPU time: %.3fms", GPUTotalTime);
       ImGui::Text("Mesh GPU time: %.3fms", GPUMeshTimer.elapsedMS);
       ImGui::Text("UI GPU time: %.3fms", GPUUITimer.elapsedMS);

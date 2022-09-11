@@ -21,6 +21,9 @@
 #include <imgui_impl_glfw.h>
 #include <imgui_impl_opengl3.h>
 
+//IMPLOT includes
+#include <implot.h>
+
 //CRT Includes
 #include <stdio.h>
 #include <stdint.h>
@@ -196,10 +199,9 @@ void renderWindow()
     }
   //drawMesh(galRenderData.debugGeometryMesh, {0.0,0.0,0.0},{0.0,0.0,0.0},{1.0,1.0,1.0});
   //addDebugRect({0.0,0.0,0.0},{1.0, 0.0, 1.0}, {0.0,1.0,1.0}, {0.0,1.0,0.0});
-  addDebugLine({1.0,-1.0,0.0},{0.0, 10.0, 0.0});
   //glBindVertexArray(globalRenderData.debugGeometryMesh->rendererData.vertexArrayKey);
   //VertexBuffer
-
+  
   endGLTimer(&GPUMeshTimer);
     
   //UI
@@ -343,12 +345,26 @@ void checkCollisions(Entity* e, int startingIndex)
 	  Entity* other = globalEntityRegistry->entities + i;	  
 	  if (other != e && other->visible && other->physicsEnabled)
 	    {
-	      if (AABBColliding(e->collider.aabb, other->collider.aabb))
+	      f32 hitDist;
+	      if (AABBCollidingContinuous(e->collider.aabb, other->collider.aabb,
+					  e->velocity, other->velocity,
+					  &hitDist))
 		{
-		  e->velocity *= -1;
+		  vec3 relativeVelocity = e->velocity - other->velocity * globalDeltaTime;
+		  vec3 tangent = Normalize(relativeVelocity);
+
+		  e->position += e->velocity * globalDeltaTime * hitDist;
+		  other->position += other->velocity * globalDeltaTime * hitDist;
+
+		  e->velocity *= 0;
+		  //e->velocity = Dot(e->velocity, tangent) * tangent;
+		  //other->velocity = Dot(other->velocity, tangent) * tangent;
 		  //e->visible = false;
 		  //other->visible = false;
 		}
+	      else {
+		e->position += e->velocity * globalDeltaTime;	
+	      }
 	    }
 	}
     } 
@@ -363,10 +379,13 @@ void physicsUpdate()
       if (globalEntityRegistry->occupiedIndices[i] && globalEntityRegistry->entities[i].meshes)
 	{
 	  Entity* e = globalEntityRegistry->entities + i;
-	  if (e->visible && e->physicsEnabled)
+	  if (globalDebugData.showAABB)
 	    {
-	      setEntityAABBCollider(e);
-	      addDebugLineBox(e->collider.aabb.min, e->collider.aabb.max);
+	      if (e->visible && e->physicsEnabled)
+		{	      
+		  setEntityAABBCollider(e);
+		  addDebugLineBox(e->collider.aabb.min, e->collider.aabb.max, 0.0);
+		}
 	    }
 	}
     }
@@ -383,7 +402,7 @@ void physicsUpdate()
 		{
 		  e->velocity.y -= 9.80f * globalDeltaTime;
 		}
-	      e->position += e->velocity * globalDeltaTime;
+	      //e->position += e->velocity * globalDeltaTime;
 	      e->rotation += e->angularVelocity * globalDeltaTime;
 	    }
 	}
@@ -399,6 +418,7 @@ int initEngine()
   //Init input and renderer
   initInput();
   initRenderer();
+  initGeneralDebugInfo();
 
   //Init font
   //mainFont = initFont("res/fonts/TIMES.ttf",80);
@@ -408,13 +428,14 @@ int initEngine()
   initGLTimer(&GPUMeshTimer);
   initGLTimer(&GPUUITimer);
   initGLTimer(&GPUImGUITimer);
-
-  
+    
   // Setup Dear ImGui context
   IMGUI_CHECKVERSION();
   ImGui::CreateContext();
   ImGuiIO& io = ImGui::GetIO(); (void)io;
   ImGui::StyleColorsDark();
+
+  ImPlot::CreateContext();
 
   // Setup Platform/Renderer backends
   ImGui_ImplGlfw_InitForOpenGL(mainWindow.glWindow, true);
@@ -505,6 +526,7 @@ int initEngine()
   free(grid);
   loadMaterial("res/materials/defaultMaterial.mat", &cave->meshes[0]->material);
   */
+
   loadScene("res/scenes/testImportModel.scene");
   //ploadScene("res/scenes/blankScene.scene");
   return 0;
@@ -517,6 +539,7 @@ void shutDownEngine()
   deleteGLTimer(&GPUMeshTimer);
   deleteGLTimer(&GPUImGUITimer);
   deleteGLTimer(&GPUUITimer);
+  ImPlot::DestroyContext();
    ImGui_ImplOpenGL3_Shutdown();
   ImGui_ImplGlfw_Shutdown();
   ImGui::DestroyContext();

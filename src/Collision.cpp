@@ -21,6 +21,71 @@ u32 rayPlaneCollision(Ray* ray, Plane* plane, f32* dist, vec3* location)
     *dist = pDist;
   return toleranceMask & distMask; 
 }
+//Essentially a bunch of ray plane tests and making sure those intersection points are inside the AABB
+//https://www.scratchapixel.com/lessons/3d-basic-rendering/minimal-ray-tracer-rendering-simple-shapes/ray-box-intersection
+u32 rayAABBCollision(Ray* ray, AABBCollider* aabb, f32* dist, vec3* location)
+{
+  //Maybe could decide which 3 sides to check based on ray direction?
+  vec3 ploc;
+  f32 pdist;
+  f32 minDist = FLT_MAX;
+  Plane plane;
+  
+  plane = {0.0, -1.0, 0.0, aabb->max.y}; //top plane
+  if (rayPlaneCollision(ray, &plane, &pdist, &ploc))
+    {
+      if (ploc.x > aabb->min.x && ploc.x < aabb->max.x &&
+	  ploc.z > aabb->min.z && ploc.z < aabb->max.z) {
+	minDist = fmin(minDist, pdist);
+      }
+    }
+  plane = {0.0, -1.0, 0.0, aabb->min.y}; //bottom plane
+  if (rayPlaneCollision(ray, &plane, &pdist, &ploc))
+    {
+      if (ploc.x > aabb->min.x && ploc.x < aabb->max.x &&
+	  ploc.z > aabb->min.z && ploc.z < aabb->max.z) {
+	minDist = fmin(minDist, pdist);
+      }
+    }
+  
+  plane = {-1.0, 0.0, 0.0, aabb->max.x}; //right plane
+  if (rayPlaneCollision(ray, &plane, &pdist, &ploc))
+    {
+      if (ploc.y > aabb->min.y && ploc.y < aabb->max.y &&
+	  ploc.z > aabb->min.z && ploc.z < aabb->max.z) {
+	minDist = fmin(minDist, pdist);
+      }
+    }
+  plane = {-1.0, 0.0, 0.0, aabb->min.x}; //bottom plane
+  if (rayPlaneCollision(ray, &plane, &pdist, &ploc))
+    {
+      if (ploc.y > aabb->min.y && ploc.y < aabb->max.y &&
+	  ploc.z > aabb->min.z && ploc.z < aabb->max.z) {
+	minDist = fmin(minDist, pdist);
+      }
+    }
+
+  plane = {0.0, 0.0, -1.0, aabb->max.z}; //far plane
+  if (rayPlaneCollision(ray, &plane, &pdist, &ploc))
+    {
+      if (ploc.y > aabb->min.y && ploc.y < aabb->max.y &&
+	  ploc.x > aabb->min.x && ploc.x < aabb->max.x) {
+	minDist = fmin(minDist, pdist);
+      }
+    }
+  plane = {0.0, 0.0, -1.0, aabb->min.z}; //near plane
+  if (rayPlaneCollision(ray, &plane, &pdist, &ploc))
+    {
+      if (ploc.y > aabb->min.y && ploc.y < aabb->max.y &&
+	  ploc.x > aabb->min.x && ploc.x < aabb->max.x) {
+	minDist = fmin(minDist, pdist);
+      }
+    }
+  
+  return minDist != FLT_MAX;
+
+}
+
 u32 rayCylinderCollision(Ray* ray, Cylinder* cyl, f32* outDist, vec3* location)
 {
   vec3 perpDir = Cross(ray->direction, cyl->direction);
@@ -314,13 +379,11 @@ void setEntityAABBCollider(Entity* e)
 	    }
 	}
     }
-  vec4 min4 = {min.x, min.y, min.z, 1};
-  vec4 max4 = {max.x, max.y, max.z, 1};
   e->collider.aabb.max = max;
   e->collider.aabb.min = min;
 }
 
-bool AABBColliding(AABBCollider a, AABBCollider b)
+bool AABBCollidingDiscrete(AABBCollider a, AABBCollider b)
 {/*
   bool colliding = 1;
   for (int axis = 0; axis < 3; axis++)
@@ -335,6 +398,42 @@ bool AABBColliding(AABBCollider a, AABBCollider b)
     a.max.y >= b.min.y &&
     a.min.z <= b.max.z &&
     a.max.z >= b.min.z;
+}
+
+AABBCollider minkowskiDifferenceAABB(AABBCollider a, AABBCollider b)
+{
+  AABBCollider md;
+  md.min = a.min - b.max;
+  md.max = a.max - b.min;
+  return md;
+}
+
+bool AABBCollidingContinuous(AABBCollider a, AABBCollider b, vec3 velocityA, vec3 velocityB,
+			     f32* retDist)
+{
+  if (AABBCollidingDiscrete(a, b))
+    {
+      //do discrete resolution
+    }
+    
+  AABBCollider md = minkowskiDifferenceAABB(a, b);
+  
+  //Check if the ray will hit the minkowski difference, if it does then it will intersect in the next frame
+  vec3 relativeVelocity = velocityA - velocityB * globalDeltaTime;
+  f32 dist;
+  vec3 hitLoc;
+  Ray ray = {0.0,0.0,0.0, relativeVelocity};
+
+  if (rayAABBCollision(&ray, &md, &dist, &hitLoc))
+    {      
+      *retDist = dist;
+      return true;
+    }
+  else
+    {
+      return false;
+    }
+
 }
 
 

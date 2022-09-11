@@ -7,3 +7,6 @@
 [submodule "dependencies/bullet3"]
 	path = dependencies/bullet3
 	url = https://github.com/bulletphysics/bullet3
+[submodule "dependencies/implot"]
+	path = dependencies/implot
+	url = https://github.com/epezent/implot

@@ -7,6 +7,22 @@ struct GLTimer
   f32 elapsedMS;
 };
 
+#define DEBUG_TIMING_HISTORY_LENGTH (5 * 60) //5 seconds of history at an assumed 60fps
+struct GlobalDebugData
+{
+  bool showAABB;
+  
+  f32 msHistory[DEBUG_TIMING_HISTORY_LENGTH];
+  f32 fpsHistory[DEBUG_TIMING_HISTORY_LENGTH];
+  u32 wrappedGraphIndex;
+  f32 weightedMS;
+  f32 weightedFPS;
+  f32 xAxis[DEBUG_TIMING_HISTORY_LENGTH];
+};
+
+static GlobalDebugData globalDebugData;
+
+void initDebugInfo();
 void drawDebugConsole();
 void startGLTimer(GLTimer* timer);
 void endGLTimer(GLTimer* timer);

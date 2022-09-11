@@ -14,6 +14,15 @@ add_library(imgui STATIC ${IMGUI_DIR}/imgui.cpp ${IMGUI_DIR}/imgui_demo.cpp ${IM
 
 target_include_directories(imgui PUBLIC dependencies/GLFW/include)
 
+#implot stuff
+project(implot)
+
+#implot.h, implot_internal.h, implot.cpp, implot_items.cpp and optionally implot_demo.cpp
+set ( IMPLOT_DIR ${CMAKE_SOURCE_DIR}/dependencies/implot )
+add_library(implot STATIC ${IMPLOT_DIR}/implot.cpp ${IMPLOT_DIR}/implot.h ${IMGUI_DIR}/imgui.h ${IMPLOT_DIR}/implot_internal.h ${IMPLOT_DIR}/implot_items.cpp)
+target_include_directories(implot PUBLIC dependencies/imgui-master)
+#target_include_directories(implot PUBLIC dependencies/GLFW/include)
+
 #set project
 project(Engine)
 
@@ -21,7 +30,7 @@ project(Engine)
 #set sources
 file(GLOB SOURCES "src/*.cpp")
 
-set ( PROJECT_LINK_LIBS ${CMAKE_SOURCE_DIR}/dependencies/GLFW/lib-x86_64/libglfw3.a ${CMAKE_SOURCE_DIR}/dependencies/GLEW/lib/libGLEW.a imgui )
+set ( PROJECT_LINK_LIBS ${CMAKE_SOURCE_DIR}/dependencies/GLFW/lib-x86_64/libglfw3.a ${CMAKE_SOURCE_DIR}/dependencies/GLEW/lib/libGLEW.a imgui implot)
 
 #add the executable name
 add_executable(Engine src/Application.cpp)
@@ -32,10 +41,11 @@ target_include_directories(Engine PUBLIC dependencies/GLEW/include)
 target_include_directories(Engine PUBLIC dependencies/OBJ-Loader)
 target_include_directories(Engine PUBLIC dependencies/stb)
 target_include_directories(Engine PUBLIC dependencies/imgui-master)
+target_include_directories(Engine PUBLIC dependencies/implot)	
 target_include_directories(Engine PUBLIC dependencies/msdfgen-atlas-gen)
 target_include_directories(Engine PUBLIC dependencies/perlin-noise/src)
 target_include_directories(Engine PUBLIC dependencies/OpenFBX/src)
-
+target_include_directories(Engine PUBLIC dependencies/bullet3/src)
 
 target_link_libraries(Engine "-framework Cocoa")
 target_link_libraries(Engine "-framework OpenGL")

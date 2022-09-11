@@ -5,7 +5,7 @@
 #include "RendererTextures.cpp"
 #include "RendererHelpers.cpp"
 #include "RendererPrimitives.cpp"
-
+#include "RendererDebugGeometry.cpp"
 #include "Camera.h"
 /* TODO
 
@@ -69,14 +69,8 @@ void setFrameBufferShader(int shader)
   globalRenderData.frameBufferShader = globalRenderData.postProcessingShaders[shader];
 }
 			
-void initializeFrameBuffers()
+void initializeFrameBuffers(u32 framebufferWidth, u32 framebufferHeight)
 {
-  //FRONT BUFFER
-  //Get size, since mac retina displays need different resolutions than window size
-  s32 framebufferWidth;
-  s32 framebufferHeight;
-  glfwGetFramebufferSize(mainWindow.glWindow, &framebufferWidth, &framebufferHeight);
-
   globalRenderData.frameBufferHeight = framebufferHeight;
   globalRenderData.frameBufferWidth = framebufferWidth;
 
@@ -88,9 +82,11 @@ void initializeFrameBuffers()
   glGenTextures(1, &globalRenderData.frontBufferTexture);
   glBindTexture(GL_TEXTURE_2D, globalRenderData.frontBufferTexture);
   glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA16F, framebufferWidth, framebufferHeight, 0, GL_RGBA, GL_UNSIGNED_BYTE, NULL);
-  glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+  /*  glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
   glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR_MIPMAP_LINEAR);
-
+  */
+  glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
+  glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
   //Bind texture
   glFramebufferTexture2D(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_TEXTURE_2D, globalRenderData.frontBufferTexture, 0);
 
@@ -181,102 +177,6 @@ void initShadowMapInfo()
 							   "res/shaders/depthFrag.glsl");
 }
 
-void initDebugGeometryMesh()
-{
-  Mesh* m = (Mesh*)calloc(1, sizeof(Mesh));
-  globalRenderData.meshesToDraw[0] = m;
-  globalRenderData.debugGeometryMesh = globalRenderData.meshesToDraw[0];
-  globalRenderData.meshesToDrawCount = 1;
-  m->visible = true;
-  u32 totalVertexCount = 6 * 512;
-  m->vertices = malloc(sizeof(Vertex) * totalVertexCount);
-  globalRenderData.meshTransforms[0] = {0.0,0.0,0.0};
-  globalRenderData.meshTransforms[1] = {0.0,0.0,0.0};
-  globalRenderData.meshTransforms[2] = {1.0,1.0,1.0};  
-
-  //m->indices = (u32*) malloc(sizeof(u32) * totalVertexCount);
-
-  m->vertexCount = totalVertexCount;
-  addMesh(m, "res/shaders/normalVisVertex.glsl", "res/shaders/normalVisFrag.glsl");
-  //addMesh(m, "res/shaders/basicLightVertex.glsl", "res/shaders/basicLightFrag.glsl");
-  m->vertexCount = 0;
-  m->rendererData.indexCount = 0;
-}
-
-
-void addDebugRect(vec3 c0, vec3 c1, vec3 c2, vec3 c3)
-{
-  float thickness = 0.1f;
-  Vertex* vertices = (Vertex*)globalRenderData.debugGeometryMesh->vertices;
-  Mesh* m = globalRenderData.debugGeometryMesh;
-
-  vertices[m->vertexCount + 0].pos = c0;
-  vertices[m->vertexCount + 1].pos = c1;
-  vertices[m->vertexCount + 2].pos = c2;
-  
-  vertices[m->vertexCount + 3].pos = c0;
-  vertices[m->vertexCount + 4].pos = c2;
-  vertices[m->vertexCount + 5].pos = c3;
-
-  for (int i =0 ; i< 6; i++)
-    {
-      vertices[m->vertexCount + i].normal = {0.0, 1.0, 0.0};
-      //m->indices[m->vertexCount + i] = m->vertexCount + i;
-    }
-  m->rendererData.indexCount += 6;
-  m->vertexCount += 6;
-}
-void addDebugLine(vec3 min, vec3 max)
-{
-  vec3 dir = Normalize(min - max);
-  vec3 orth = Cross(dir, Normalize(mainCamera.pos - max));
-  vec3 corners[4];
-  float t = 0.005f;
-  
-  corners[0] = min - orth * t;
-  corners[1] = min + orth * t;
-  corners[2] = max + orth * t;
-  corners[3] = max - orth * t;
-
-  addDebugRect(corners[0], corners[1], corners[2], corners[3] );
-}
-void addDebugLineBox(vec3 min, vec3 max)
-{
-  vec3 corners[8];
-  corners[0] = {min.x, min.y, min.z};
-  corners[1] = {min.x, min.y, max.z};
-  corners[2] = {min.x, max.y, min.z};
-  corners[3] = {min.x, max.y, max.z};
-
-  corners[4] = {max.x, min.y, min.z};
-  corners[5] = {max.x, min.y, max.z};
-  corners[6] = {max.x, max.y, min.z};
-  corners[7] = {max.x, max.y, max.z};
-  
-  addDebugLine(corners[0], corners[1]);
-  addDebugLine(corners[0], corners[2]);
-  addDebugLine(corners[3], corners[2]);
-  addDebugLine(corners[3], corners[1]);
-
-  addDebugLine(corners[4], corners[5]);
-  addDebugLine(corners[4], corners[6]);
-  addDebugLine(corners[7], corners[6]);
-  addDebugLine(corners[7], corners[5]);
-
-  addDebugLine(corners[0], corners[4]);
-  addDebugLine(corners[1], corners[5]);
-  addDebugLine(corners[2], corners[6]);
-  addDebugLine(corners[3], corners[7]);
-
-
-}
-
-void updateDebugLineBuffers()
-{
-  // glGenBuffers(1, &globalRenderData.debugGeometryMesh->rendererData.vertexBufferKey);
-  glBindBuffer(GL_ARRAY_BUFFER, globalRenderData.debugGeometryMesh->rendererData.vertexBufferKey);
-  glBufferData(GL_ARRAY_BUFFER, sizeof(Vertex) * globalRenderData.debugGeometryMesh->vertexCount, globalRenderData.debugGeometryMesh->vertices, GL_DYNAMIC_DRAW);
-}
 
 void initRenderer()
 {  
@@ -299,7 +199,12 @@ void initRenderer()
 
   globalRenderData.meshesToDrawCount = 1;
 
-  
+  //FRONT BUFFER
+  glfwGetFramebufferSize(mainWindow.glWindow, &globalRenderData.viewportWidth, &globalRenderData.viewportHeight);
+
+  #if DEBUG_INIT_STATS
+  printf("VIEWPORT WIDTH/HEIGHT: %d %d\n", globalRenderData.viewportHeight, globalRenderData.viewportWidth);
+  #endif
 
   globalRenderData.exposure = 0.2f;
   globalRenderData.enabledScreenShader = 0;
@@ -374,7 +279,9 @@ void initRenderer()
     }
   setRendererShaderMode(0);
 
-  initializeFrameBuffers();
+  //Decrease to upscale
+  initializeFrameBuffers(globalRenderData.viewportWidth, globalRenderData.viewportHeight);
+  //initializeFrameBuffers(540, 360);
   glGenerateMipmap(GL_TEXTURE_2D);
 
   initShadowMapInfo();
@@ -762,15 +669,16 @@ void flushMeshesAndRender()
   mat4 lightProjection = globalRenderData.dirLights[0].shadowMatrix;
   mat4 lightMatrix = lightProjection * LookAt(lightPos, target, up);
 
-  updateDebugLineBuffers();
+  drawDebugGeometry();
   shadowMapPass(&lightMatrix);
   //Reset to other frame buffer ot draw geometry
   glCullFace(GL_BACK);
   glViewport(0,0,globalRenderData.frameBufferWidth, globalRenderData.frameBufferHeight);
-  glBindFramebuffer(GL_FRAMEBUFFER, globalRenderData.frontBuffer);
+  glBindFramebuffer(GL_FRAMEBUFFER, globalRenderData.frontBuffer);  
+  renderPass(&lightMatrix);
   
-  renderPass(&lightMatrix);  
-
+  glViewport(0,0,globalRenderData.viewportWidth, globalRenderData.viewportHeight);
+  
   globalRenderData.meshesToDrawCount = 1;
   globalRenderData.debugGeometryMesh->vertexCount = 0;
   globalRenderData.debugGeometryMesh->rendererData.indexCount = 0;
@@ -795,9 +703,6 @@ f32 getAverageLuminanceOfFrameBuffer()
 void swapToFrameBufferAndDraw()
 {
 
-  //TODO: FIX this function and optimize it
-  //calculateDirLightPositions();
-  
   flushMeshesAndRender();
 
   

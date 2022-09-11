@@ -183,3 +183,5 @@ void glSetNormalMatrix(u32 program, mat4* modelMatrix)
       glUniformMatrix4fv(location, 1, GL_FALSE, (float*)&normalMatrix);
     }
 }
+
+

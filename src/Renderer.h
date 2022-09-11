@@ -37,9 +37,18 @@ struct DirectionalLight
 #define RENDERER_POINT_LIGHT_COUNT 2
 #define RENDERER_DIRECTIONAL_LIGHT_COUNT 1
 
+#define RENDERER_MAX_DEBUG_LINE_COUNT 512
+
 #define GAMMA_MASK 0x1
 #define TONE_MAP_MASK 0x2
 #define AUTO_EXPOSURE_MASK 0x4
+
+struct DebugLine {
+  bool active;
+  vec3 min, max, colour;
+  f32 lifeTime;
+  u32 shapeID;
+};
 
 struct RendererData
 {
@@ -135,8 +144,13 @@ struct RendererData
   vec3 meshTransforms[RENDERER_MESH_DRAW_COUNT * 3];
   mat4 meshModelMatrices[RENDERER_MESH_DRAW_COUNT];
   u32 meshesToDrawCount;
+
   
+  DebugLine debugLines[RENDERER_MAX_DEBUG_LINE_COUNT];
+  u32 debugLineIndex;
   Mesh* debugGeometryMesh;
+
+  s32 viewportWidth, viewportHeight;
 };
 
 struct VertexLayoutComponent
