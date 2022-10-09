@@ -7,6 +7,7 @@
 #include "RendererPrimitives.cpp"
 #include "RendererDebugGeometry.cpp"
 #include "Camera.h"
+#include "Palette.cpp"
 /* TODO
 
    Consider having one big buffer that it copies data into, 
@@ -71,8 +72,11 @@ void setFrameBufferShader(int shader)
 			
 void initializeFrameBuffers(u32 framebufferWidth, u32 framebufferHeight)
 {
-  globalRenderData.frameBufferHeight = framebufferHeight;
-  globalRenderData.frameBufferWidth = framebufferWidth;
+  if (globalRenderData.frameBufferHeight == -1 || globalRenderData.frameBufferWidth == -1)
+    {
+      globalRenderData.frameBufferHeight = framebufferHeight;
+      globalRenderData.frameBufferWidth = framebufferWidth;
+    }
 
   //Gen frame buffer
   glGenFramebuffers(1, &globalRenderData.frontBuffer);
@@ -81,8 +85,9 @@ void initializeFrameBuffers(u32 framebufferWidth, u32 framebufferHeight)
   // generate texture
   glGenTextures(1, &globalRenderData.frontBufferTexture);
   glBindTexture(GL_TEXTURE_2D, globalRenderData.frontBufferTexture);
-  glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA16F, framebufferWidth, framebufferHeight, 0, GL_RGBA, GL_UNSIGNED_BYTE, NULL);
-  /*  glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+  glTexImage2D(GL_TEXTURE_2D, 0, GL_RGB8, globalRenderData.frameBufferWidth, globalRenderData.frameBufferHeight, 0, GL_RGB, GL_UNSIGNED_BYTE, NULL);
+  /*  
+glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
   glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR_MIPMAP_LINEAR);
   */
   glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
@@ -94,7 +99,7 @@ void initializeFrameBuffers(u32 framebufferWidth, u32 framebufferHeight)
   unsigned int rbo;
   glGenRenderbuffers(1, &rbo);
   glBindRenderbuffer(GL_RENDERBUFFER, rbo); 
-  glRenderbufferStorage(GL_RENDERBUFFER, GL_DEPTH24_STENCIL8, framebufferWidth, framebufferHeight);  
+  glRenderbufferStorage(GL_RENDERBUFFER, GL_DEPTH24_STENCIL8, globalRenderData.frameBufferWidth, globalRenderData.frameBufferHeight);  
 
   //Bind render buffer
   glFramebufferRenderbuffer(GL_FRAMEBUFFER, GL_DEPTH_STENCIL_ATTACHMENT, GL_RENDERBUFFER, rbo);
@@ -108,7 +113,7 @@ void initializeFrameBuffers(u32 framebufferWidth, u32 framebufferHeight)
 
   //Set shaders for post processing
   initializeFrameBufferShaders();
-  globalRenderData.frameBufferShader = globalRenderData.postProcessingShaders[4];
+  globalRenderData.frameBufferShader = globalRenderData.postProcessingShaders[2];
 
 
   //DISPLAY BUFFER
@@ -177,6 +182,24 @@ void initShadowMapInfo()
 							   "res/shaders/depthFrag.glsl");
 }
 
+void initRendererColourPaletteLUT()
+{
+
+  u8* colourData = readPaletteLUTFile("res/palettes/toxicPalette.palette");
+  //colour palettization
+  //generate texture
+  glGenTextures(1, &globalRenderData.colourPaletteLUT);
+  glBindTexture(GL_TEXTURE_3D, globalRenderData.colourPaletteLUT);
+  glTexImage3D(GL_TEXTURE_3D, 0, GL_RGB8,
+	       PALETTE_LUT_DIMS, PALETTE_LUT_DIMS, PALETTE_LUT_DIMS, 
+	       0, GL_RGB, GL_UNSIGNED_BYTE, colourData);
+  glTexParameteri(GL_TEXTURE_3D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
+  glTexParameteri(GL_TEXTURE_3D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
+  glTexParameteri(GL_TEXTURE_3D, GL_TEXTURE_WRAP_S, GL_REPEAT);
+  glTexParameteri(GL_TEXTURE_3D, GL_TEXTURE_WRAP_T, GL_REPEAT);
+  free(colourData);
+}
+
 
 void initRenderer()
 {  
@@ -200,7 +223,9 @@ void initRenderer()
   globalRenderData.meshesToDrawCount = 1;
 
   //FRONT BUFFER
+ 
   glfwGetFramebufferSize(mainWindow.glWindow, &globalRenderData.viewportWidth, &globalRenderData.viewportHeight);
+ 
 
   #if DEBUG_INIT_STATS
   printf("VIEWPORT WIDTH/HEIGHT: %d %d\n", globalRenderData.viewportHeight, globalRenderData.viewportWidth);
@@ -208,7 +233,7 @@ void initRenderer()
 
   globalRenderData.exposure = 0.2f;
   globalRenderData.enabledScreenShader = 0;
-  setFrameBufferShader(0);
+  setFrameBufferShader(2);
   globalRenderData.luminanceTemporal = 1.0f;
   globalRenderData.exposureChangeRate = 1.0f;
 
@@ -283,6 +308,9 @@ void initRenderer()
   initializeFrameBuffers(globalRenderData.viewportWidth, globalRenderData.viewportHeight);
   //initializeFrameBuffers(540, 360);
   glGenerateMipmap(GL_TEXTURE_2D);
+
+  initRendererColourPaletteLUT();
+  globalRenderData.palettize = false;
 
   initShadowMapInfo();
   u8* data = loadTexture(&globalRenderData.blueNoiseTex, "res/textures/LDR_RGB1_0.png", GL_REPEAT, GL_NEAREST);
@@ -628,7 +656,7 @@ void renderPass(mat4* lightMatrix)
       glActiveTexture(GL_TEXTURE0);
       glBindTexture(GL_TEXTURE_2D, globalRenderData.shadowMapTexture);
       glActiveTexture(GL_TEXTURE1);
-      glBindTexture(GL_TEXTURE_2D, globalRenderData.blueNoiseTex);
+      glBindTexture(GL_TEXTURE_3D, globalRenderData.colourPaletteLUT);
       glActiveTexture(GL_TEXTURE0);
       glDrawElements(GL_TRIANGLES, mesh->rendererData.indexCount, GL_UNSIGNED_INT, NULL);
       errCheck();
@@ -718,6 +746,11 @@ void swapToFrameBufferAndDraw()
   glBindTexture(GL_TEXTURE_2D, globalRenderData.frontBufferTexture);
   //If we have autoexposure enabled, we need average luminance which is found by
   //getting 1x1 mip map
+  u32 location = glGetUniformLocation(globalRenderData.frameBufferShader, "blueNoise");
+  if (location != -1)
+    {
+      glUniform1i(location, 1);
+    }
 
   if (globalRenderData.enabledScreenShader == 4)
     {
@@ -726,6 +759,11 @@ void swapToFrameBufferAndDraw()
       globalRenderData.exposure = Clamp(0.2, 0.1 / globalRenderData.luminanceTemporal, 10.0);
     }
   setFloatUniform(globalRenderData.frameBufferShader, "exposure", globalRenderData.exposure);
+  location = glGetUniformLocation(globalRenderData.frameBufferShader, "palettize");
+  if (location != -1)
+    {
+      glUniform1i(location, globalRenderData.palettize);
+    }
 
   glDrawArrays(GL_TRIANGLES, 0, 6); //Draw
 

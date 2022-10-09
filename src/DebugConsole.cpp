@@ -349,6 +349,7 @@ void drawDebugConsole()
     {
       //Wireframe
       ImGui::Checkbox("Wireframes" , &globalRenderData.wireFrameMode);
+      ImGui::Checkbox("Palettize" , &globalRenderData.palettize);
       //Index counts for renderer buffers
       for (int i = 0; i < RENDERER_BUFFER_COUNT; i++)
 	{
@@ -386,6 +387,7 @@ void drawDebugConsole()
       //Vsync
       if (ImGui::Checkbox("Toggle Vsync", (bool*)&mainWindow.vSyncOn))
 	setVSync(mainWindow.vSyncOn);
+
     }
 
   //UI Text values

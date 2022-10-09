@@ -1,9 +1,10 @@
 #version 330 core
-out vec4 FragColor;
-  
+out vec4 FragColor;  
 in vec2 TexCoord;
 
+uniform int palettize;
 uniform sampler2D screenTexture;
+uniform sampler3D blueNoise;
 vec3 ACESFilm(vec3 x)
 {
     float a = 2.51f;
@@ -23,6 +24,14 @@ void main()
   hdrColor = ACESFilm(hdrColor);
 
   hdrColor = pow(hdrColor, vec3(1.0 / gamma));
-   
-  FragColor = vec4(hdrColor, 1.0);
+
+  if (palettize != 0)
+    {
+      vec3 map = hdrColor.rgb;      
+      FragColor = vec4(texture(blueNoise, map));
+    }
+  else
+    {
+      FragColor = vec4(hdrColor,1.0);
+    }
 }

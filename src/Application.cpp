@@ -353,18 +353,17 @@ void checkCollisions(Entity* e, int startingIndex)
 		  vec3 relativeVelocity = e->velocity - other->velocity * globalDeltaTime;
 		  vec3 tangent = Normalize(relativeVelocity);
 
-		  e->position += e->velocity * globalDeltaTime * hitDist;
-		  other->position += other->velocity * globalDeltaTime * hitDist;
+		  //e->position += e->velocity * globalDeltaTime * hitDist;
+		  //other->position += other->velocity * globalDeltaTime * hitDist;
 
 		  e->velocity *= 0;
+		  other->velocity *= -1;
 		  //e->velocity = Dot(e->velocity, tangent) * tangent;
 		  //other->velocity = Dot(other->velocity, tangent) * tangent;
 		  //e->visible = false;
 		  //other->visible = false;
 		}
-	      else {
-		e->position += e->velocity * globalDeltaTime;	
-	      }
+
 	    }
 	}
     } 
@@ -402,7 +401,7 @@ void physicsUpdate()
 		{
 		  e->velocity.y -= 9.80f * globalDeltaTime;
 		}
-	      //e->position += e->velocity * globalDeltaTime;
+	      e->position += e->velocity * globalDeltaTime;
 	      e->rotation += e->angularVelocity * globalDeltaTime;
 	    }
 	}
@@ -412,8 +411,11 @@ void physicsUpdate()
 
 int initEngine()
 {
+  initGlobalIni("engineInfo.ini");
   //Open window
-  openWindow(720,1080);
+   openWindow(mainWindow.height,
+     mainWindow.width);
+   //openWindow(720, 1080);
   
   //Init input and renderer
   initInput();

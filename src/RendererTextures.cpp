@@ -35,14 +35,13 @@ u8* loadTexture(u32* textureKey, const char* textureFile, GLenum wrapType, GLenu
 
   if (!data)
     {
-      char texPath[512] = "textures/";
+      char texPath[512] = "res/textures/";
       strcpy(texPath + 9, textureFile);
       u8* data = stbi_load(texPath, &x, &y, &n, 0);
       if (!data)
 	{
 	  printf("WARNING: FAILED TO LOAD TEXTURE:%s\n", textureFile);
 	  printf("STBI ERROR: %s\n",stbi_failure_reason());
-	  //Assert(0);
 	  return NULL;
 	}
     }
@@ -73,6 +72,26 @@ u8* loadTexture(u32* textureKey, const char* textureFile)
   return loadTexture(textureKey, textureFile, GL_CLAMP_TO_BORDER, GL_LINEAR);
 }
 
+u8* loadRawImage(const char* textureFile, s32* width, s32* height, s32* channelCount )
+{
+    //load image
+  int x, y, n;
+  u8* data = stbi_load(textureFile, width, height, channelCount, 0);
+
+  if (!data)
+    {
+      char texPath[512] = "res/textures/";
+      strcpy(texPath + strlen(texPath), textureFile);
+      data = stbi_load(texPath, width, height, channelCount, 0);
+      if (!data)
+	{
+	  printf("WARNING: FAILED TO LOAD TEXTURE:%s\n", textureFile);
+	  printf("STBI ERROR: %s\n",stbi_failure_reason());
+	  return NULL;
+	}
+    }
+  return data;
+}
 //requesst a key to be put in the renderer's texture buffer pool. returns the opengl Key
 u32 requestTextureKey(const char* textureName)
 {  

@@ -87,6 +87,9 @@ struct RendererData
   //ie: these point to a certain index of underscore'd versions.
   //Consider just using the arrays. This could produce overhead from switching shaders
   //Also this is very overcomplicated. REWORK
+
+  //Sept 24 2022 - might not even need this anymore unless you wanted to do something fancy
+  //Any geometry in the world is done through meshes, then UI through this. So maybe only need the 1?
   u32* texturesToBind;
   u32* texturesToBindCount;
 
@@ -114,6 +117,9 @@ struct RendererData
   u32 frontBuffer;
   u32 frontBufferTexture;
 
+  u32 colourPaletteLUT;
+  bool palettize;
+
   u32 frameBufferShader;
   u32 frameBufferQuadVAO;
   u32 frameBufferVB;
@@ -133,8 +139,9 @@ struct RendererData
   u32 shadowMapShader;
   u32 skinnedShadowMapShader;
   
-  s32 shadowMapWidth; //currently uses frame buffer VAO and VB
-  s32 shadowMapHeight;
+  s32 shadowMapWidth, shadowMapHeight; //currently uses frame buffer VAO and VB
+
+  s32 viewportWidth, viewportHeight;
 
   u32 depthShader;
 
@@ -150,7 +157,7 @@ struct RendererData
   u32 debugLineIndex;
   Mesh* debugGeometryMesh;
 
-  s32 viewportWidth, viewportHeight;
+
 };
 
 struct VertexLayoutComponent

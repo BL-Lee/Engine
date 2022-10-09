@@ -8,5 +8,5 @@ uniform sampler2D screenTexture;
 void main()
 {
   vec3 hdrColor = texture(screenTexture, TexCoord).rgb;
-  FragColor = vec4(hdrColor, 1.0);
+  FragColor = vec4(hdrColor, 1.0);  
 }
