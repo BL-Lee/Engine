@@ -111,7 +111,7 @@ void drawDebugLightConsole()
 		  {
 		    drawImGuiRGBSlider(&p->diffuseColour, 0.0f, 1.0f);
 		  }
-		ImGui::SliderFloat("Intensity: ", &p->intensity, 0.0f, 10.0f);
+		ImGui::SliderFloat("Intensity: ", &p->intensity, 0.0f, 100.0f);
 	      }
 	      ImGui::PopID();
 	    }
@@ -304,6 +304,7 @@ void drawDebugConsole()
 
   ImGui::Text("Frame: %d, %.2f%%", anim->currentFrames[0], anim->currentInterps[0]);
   ImGui::Text("Frame: %d, %.2f%%", anim->currentFrames[1], anim->currentInterps[1]);
+  
   //Timing data
   updateGeneralDebugInfo();
   if (ImGui::CollapsingHeader("TimingData"))
@@ -347,6 +348,10 @@ void drawDebugConsole()
   //Renderer info
   if (ImGui::CollapsingHeader("Renderer"))
     {
+      ImGui::SliderFloat("Bloom Strength: %f", &globalRenderData.bloomInfo.strength, 0.0f, 1.0f);
+      ImGui::SliderFloat("Bloom Cutoff: %f", &globalRenderData.bloomInfo.cutoff, 0.0f, 1.0f);
+      ImGui::Text("Viewport: %d %d", globalRenderData.viewportWidth, globalRenderData.viewportHeight);
+      ImGui::Text("Frame Buffer: %d %d", globalRenderData.frameBufferWidth, globalRenderData.frameBufferHeight);
       //Wireframe
       ImGui::Checkbox("Wireframes" , &globalRenderData.wireFrameMode);
       ImGui::Checkbox("Palettize" , &globalRenderData.palettize);

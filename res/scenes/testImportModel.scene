@@ -4,10 +4,10 @@
 #dirLightSpecular 0.9 0.9 0.9
 #dirLightAmbient 0.3 0.3 0.3
 #newPointLight
-#pointLightDiffuse 1.0 0.1 0.1
+#pointLightDiffuse 1.0 1.0 0.1
 #pointLightAmbient 0.1 0.0 0.0
 #pointLightSpecular 1.0 0.3 0.3
-#pointLightIntensity 0.5
+#pointLightIntensity 10.0
 #newPointLight
 #pointLightDiffuse 0.1 1.0 0.75
 #pointLightAmbient 0.1 0.0 0.3

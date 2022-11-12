@@ -414,7 +414,7 @@ int initEngine()
   initGlobalIni("engineInfo.ini");
   //Open window
    openWindow(mainWindow.height,
-     mainWindow.width);
+	      mainWindow.width);
    //openWindow(720, 1080);
   
   //Init input and renderer
@@ -502,10 +502,8 @@ int initEngine()
 
   bobMesh = loadMD5Mesh("res/models/bob_lamp_update.md5mesh");
   anim = loadMD5Anim("res/models/bob_lamp_update.md5anim", bobMesh);
-  //bobMesh = loadMD5Mesh("res/models/Spider.md5mesh");
-  //anim = loadMD5Anim("res/models/Spider.md5anim", bobMesh);
 
-  /*   bob = requestNewEntity("bob");
+  bob = requestNewEntity("bob");
   bob->position.y -= 4.0f;
   bob->rotation.x = -3.14 / 2;
   bob->meshes = bobMesh->meshes;
@@ -517,8 +515,8 @@ int initEngine()
        addMesh(bobMesh->meshes[i], "res/shaders/skinnedBasicLightVertex.glsl", "res/shaders/basicLightFrag.glsl", skinnedDefaultlayout, 6);
       loadMaterial("res/materials/defaultMaterial.mat", &bob->meshes[i]->material);
     }
-    setEntityAABBCollider(bob);*/
-  /*
+    setEntityAABBCollider(bob);
+    /*
 
   //TEMP: Generate cave
   vec3i dims = {16,16,16};

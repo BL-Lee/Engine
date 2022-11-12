@@ -79,21 +79,22 @@ void initializeFrameBuffers(u32 framebufferWidth, u32 framebufferHeight)
     }
 
   //Gen frame buffer
-  glGenFramebuffers(1, &globalRenderData.frontBuffer);
-  glBindFramebuffer(GL_FRAMEBUFFER, globalRenderData.frontBuffer);
+  glGenFramebuffers(1, &globalRenderData.colorHDRFrameBuffer);
+  glBindFramebuffer(GL_FRAMEBUFFER, globalRenderData.colorHDRFrameBuffer);
   
   // generate texture
-  glGenTextures(1, &globalRenderData.frontBufferTexture);
-  glBindTexture(GL_TEXTURE_2D, globalRenderData.frontBufferTexture);
-  glTexImage2D(GL_TEXTURE_2D, 0, GL_RGB8, globalRenderData.frameBufferWidth, globalRenderData.frameBufferHeight, 0, GL_RGB, GL_UNSIGNED_BYTE, NULL);
-  /*  
-glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
-  glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR_MIPMAP_LINEAR);
-  */
+  glGenTextures(1, &globalRenderData.colorHDRFrameBufferTexture);
+  glBindTexture(GL_TEXTURE_2D, globalRenderData.colorHDRFrameBufferTexture);
+  glTexImage2D(GL_TEXTURE_2D, 0, GL_R11F_G11F_B10F,
+	       globalRenderData.frameBufferWidth, globalRenderData.frameBufferHeight,
+	       0, GL_RGB, GL_FLOAT, NULL);
   glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
   glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
+  glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
+  glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);      
+
   //Bind texture
-  glFramebufferTexture2D(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_TEXTURE_2D, globalRenderData.frontBufferTexture, 0);
+  glFramebufferTexture2D(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_TEXTURE_2D, globalRenderData.colorHDRFrameBufferTexture, 0);
 
   //Generate renderbuffer
   unsigned int rbo;
@@ -200,6 +201,54 @@ void initRendererColourPaletteLUT()
   free(colourData);
 }
 
+u32 loadBloomShader(const char* fragmentShader)
+{
+  u32 programValue = loadAndValidateShaderPair("res/shaders/bloomVertex.glsl", fragmentShader );
+  glUseProgram(programValue);
+  setIntUniform(programValue, "srcTexture", 0);
+  return programValue;
+}
+
+void initBloomInfo()
+{
+  BloomInfo* bloomInfo = &globalRenderData.bloomInfo;
+  glGenFramebuffers(1, &bloomInfo->frameBuffer);
+  glBindFramebuffer(GL_FRAMEBUFFER, bloomInfo->frameBuffer);
+
+  for (int i = 0; i < BLOOM_SAMPLE_COUNT; i++)
+    {
+      bloomInfo->sizes[i] = {globalRenderData.frameBufferWidth / (2 * (i + 1)), globalRenderData.frameBufferHeight / (2 * (i + 1))};
+      
+      glGenTextures(1, &bloomInfo->mipTextures[i]);
+      glBindTexture(GL_TEXTURE_2D, bloomInfo->mipTextures[i]);
+      glTexImage2D(GL_TEXTURE_2D, 0, GL_R11F_G11F_B10F,
+		   (int)bloomInfo->sizes[i].x, (int)bloomInfo->sizes[i].y,
+		   0, GL_RGB, GL_FLOAT, NULL);
+      glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+      glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
+      glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
+      glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);      
+    }
+  bloomInfo->downSampleProgram = loadBloomShader(   "res/shaders/bloomDownsample.glsl");
+  bloomInfo->firstDownSampleProgram = loadBloomShader("res/shaders/bloomFirstDownsample.glsl");
+  bloomInfo->upSampleProgram = loadBloomShader( "res/shaders/bloomUpsample.glsl");
+
+  glFramebufferTexture2D(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0,
+			 GL_TEXTURE_2D, bloomInfo->mipTextures[0], 0);
+// setup attachments
+  unsigned int attachments[1] = { GL_COLOR_ATTACHMENT0 };
+  glDrawBuffers(1, attachments);
+
+  bloomInfo->blendingProgram = loadAndValidateShaderPair("res/shaders/bloomVertex.glsl",
+							 "res/shaders/bloomMix.glsl");
+  glUseProgram(bloomInfo->blendingProgram);
+  setIntUniform(bloomInfo->blendingProgram, "srcTexture", 0);
+  setIntUniform(bloomInfo->blendingProgram, "bloomTexture", 1);
+
+  bloomInfo->strength = 0.04f;
+  bloomInfo->cutoff = 1.0f;
+  
+}
 
 void initRenderer()
 {  
@@ -306,11 +355,12 @@ void initRenderer()
 
   //Decrease to upscale
   initializeFrameBuffers(globalRenderData.viewportWidth, globalRenderData.viewportHeight);
-  //initializeFrameBuffers(540, 360);
   glGenerateMipmap(GL_TEXTURE_2D);
 
   initRendererColourPaletteLUT();
   globalRenderData.palettize = false;
+
+  initBloomInfo();
 
   initShadowMapInfo();
   u8* data = loadTexture(&globalRenderData.blueNoiseTex, "res/textures/LDR_RGB1_0.png", GL_REPEAT, GL_NEAREST);
@@ -338,7 +388,7 @@ void deleteRenderer()
   glDeleteBuffers(1, &globalRenderData.vertexBufferKey);
   glDeleteBuffers(1, &globalRenderData.indexBufferKey);
 
-  glDeleteFramebuffers(1, &globalRenderData.frontBuffer);
+  glDeleteFramebuffers(1, &globalRenderData.colorHDRFrameBuffer);
 
   free(globalRenderData.textureNames);
   free(globalRenderData.textureKeys);
@@ -702,7 +752,7 @@ void flushMeshesAndRender()
   //Reset to other frame buffer ot draw geometry
   glCullFace(GL_BACK);
   glViewport(0,0,globalRenderData.frameBufferWidth, globalRenderData.frameBufferHeight);
-  glBindFramebuffer(GL_FRAMEBUFFER, globalRenderData.frontBuffer);  
+  glBindFramebuffer(GL_FRAMEBUFFER, globalRenderData.colorHDRFrameBuffer);  
   renderPass(&lightMatrix);
   
   glViewport(0,0,globalRenderData.viewportWidth, globalRenderData.viewportHeight);
@@ -728,22 +778,114 @@ f32 getAverageLuminanceOfFrameBuffer()
   
 }
 
-void swapToFrameBufferAndDraw()
+//General post processing pipeline
+/*
+
+  1. bind frame buffer to render to
+  2. bind shader and VAO
+  3. bind textures
+  4. post process
+
+ */
+void bloomPasses(u32 readBuffer)
 {
 
-  flushMeshesAndRender();
+  BloomInfo bloomInfo = globalRenderData.bloomInfo;
+  glBindFramebuffer(GL_READ_FRAMEBUFFER, globalRenderData.colorHDRFrameBuffer);
+  glBindFramebuffer(GL_DRAW_FRAMEBUFFER, bloomInfo.frameBuffer); // write to default framebuffer
+  glBlitFramebuffer(
+		    0, 0, globalRenderData.frameBufferWidth, globalRenderData.frameBufferHeight,
+		    0, 0, globalRenderData.frameBufferWidth, globalRenderData.frameBufferHeight,
+		    GL_COLOR_BUFFER_BIT, GL_NEAREST
+		    );
+  glBindFramebuffer(GL_FRAMEBUFFER, bloomInfo.frameBuffer);
+  //glDrawArrays(GL_TRIANGLES, 0, 6); //Draw
+  
+  glUseProgram(bloomInfo.firstDownSampleProgram);
+  
+  glBindVertexArray(globalRenderData.frameBufferQuadVAO);
+  glBindTexture(GL_TEXTURE_2D, globalRenderData.colorHDRFrameBufferTexture);
+  
+  glViewport(0, 0, bloomInfo.sizes[0].x, bloomInfo.sizes[0].y);
+  glFramebufferTexture2D(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0,
+			 GL_TEXTURE_2D, bloomInfo.mipTextures[0], 0);  
 
+  setVec2Uniform(bloomInfo.firstDownSampleProgram, "srcResolution", bloomInfo.sizes[0]);
+  setFloatUniform(bloomInfo.firstDownSampleProgram, "cutoff", bloomInfo.cutoff);
   
-  errCheck();
-  //Dont draw wireframes on the fullscreen quad
-  glPolygonMode(GL_FRONT_AND_BACK, GL_FILL);
+  glDrawArrays(GL_TRIANGLES, 0, 6);
+  glBindTexture(GL_TEXTURE_2D, bloomInfo.mipTextures[0]);
+  glUseProgram(bloomInfo.downSampleProgram);
+
+  for (int i = 1; i < BLOOM_SAMPLE_COUNT; i++)
+    {
+      glViewport(0, 0, bloomInfo.sizes[i].x, bloomInfo.sizes[i].y);
+      glFramebufferTexture2D(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0,
+                               GL_TEXTURE_2D, bloomInfo.mipTextures[i], 0);
+
+      setVec2Uniform(bloomInfo.downSampleProgram, "srcResolution", bloomInfo.sizes[i]);
+      
+      glDrawArrays(GL_TRIANGLES, 0, 6);
+      glBindTexture(GL_TEXTURE_2D, bloomInfo.mipTextures[i]);
+    }
+  glUseProgram(bloomInfo.upSampleProgram);
+  setFloatUniform(bloomInfo.upSampleProgram,"filterRadius", 0.005f);
+
+  // Enable additive blending
+  glEnable(GL_BLEND);
+  glBlendFunc(GL_ONE, GL_ONE);
+  glBlendEquation(GL_FUNC_ADD);
   
+  for (int i = BLOOM_SAMPLE_COUNT - 1; i > 0; i--)
+    {
+
+      glBindTexture(GL_TEXTURE_2D, bloomInfo.mipTextures[i]);
+
+      glViewport(0, 0, bloomInfo.sizes[i-1].x, bloomInfo.sizes[i-1].y);
+      glFramebufferTexture2D(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0,
+                               GL_TEXTURE_2D, bloomInfo.mipTextures[i-1], 0);
+
+      glDrawArrays(GL_TRIANGLES, 0, 6);
+      glBindTexture(GL_TEXTURE_2D, bloomInfo.mipTextures[i]);
+    }
+
+  glDisable(GL_BLEND);
+  glViewport(0,0,globalRenderData.viewportWidth, globalRenderData.viewportHeight);  
+  glBindFramebuffer(GL_FRAMEBUFFER, 0);
+
+}
+
+void bloomMixing()
+{
+  //glBindFramebuffer(GL_FRAMEBUFFER,
+  glUseProgram(globalRenderData.bloomInfo.blendingProgram);
+  glActiveTexture(GL_TEXTURE0 + 0);
+  glBindTexture(GL_TEXTURE_2D, globalRenderData.colorHDRFrameBufferTexture);
+  glActiveTexture(GL_TEXTURE0 + 1);
+  glBindTexture(GL_TEXTURE_2D, globalRenderData.bloomInfo.mipTextures[0]);
+  setFloatUniform(globalRenderData.bloomInfo.blendingProgram, "bloomStrength", globalRenderData.bloomInfo.strength);
+
+    {
+      //globalRenderData.luminanceTemporal = getAverageLuminanceOfFrameBuffer();
+      //Calculate exposure value
+      //globalRenderData.exposure = Clamp(0.2, 0.1 / globalRenderData.luminanceTemporal, 10.0);
+    }
+  setFloatUniform(globalRenderData.bloomInfo.blendingProgram, "exposure", 0.5);
+
+
+
+  glDrawArrays(GL_TRIANGLES, 0, 6); //Draw
+
+}
+
+void generalPostProcessingPass(u32 readFrameBuffer, u32 drawFrameBuffer)
+{
+  glBindFramebuffer(GL_FRAMEBUFFER, drawFrameBuffer);
   // swap to screen frameBuffer
-  glBindFramebuffer(GL_FRAMEBUFFER, 0); // back to default
+  //glBindFramebuffer(GL_FRAMEBUFFER, frameBuffer); // back to default
   glUseProgram(globalRenderData.frameBufferShader);
   glBindVertexArray(globalRenderData.frameBufferQuadVAO);
 
-  glBindTexture(GL_TEXTURE_2D, globalRenderData.frontBufferTexture);
   //If we have autoexposure enabled, we need average luminance which is found by
   //getting 1x1 mip map
   u32 location = glGetUniformLocation(globalRenderData.frameBufferShader, "blueNoise");
@@ -766,6 +908,29 @@ void swapToFrameBufferAndDraw()
     }
 
   glDrawArrays(GL_TRIANGLES, 0, 6); //Draw
+  glBindFramebuffer(GL_READ_FRAMEBUFFER, readFrameBuffer);
+  glBindFramebuffer(GL_DRAW_FRAMEBUFFER, drawFrameBuffer); // write to default framebuffer
+  glBlitFramebuffer(
+		    0, 0, globalRenderData.viewportWidth, globalRenderData.viewportHeight,
+		    0, 0, globalRenderData.viewportWidth, globalRenderData.viewportHeight,
+		    GL_COLOR_BUFFER_BIT, GL_NEAREST
+		    );
+}
+
+void swapToFrameBufferAndDraw()
+{
+
+  flushMeshesAndRender();
+
+  
+  errCheck();
+  //Dont draw wireframes on the fullscreen quad
+  glPolygonMode(GL_FRONT_AND_BACK, GL_FILL);
+
+  //generalPostProcessingPass(globalRenderData.colorHDRFrameBufferTexture, globalRenderData.bloomInfo.mipTextures[0]);
+  //generalPostProcessingPass(globalRenderData.colorHDRFrameBufferTexture, 0);
+  bloomPasses(0);
+  bloomMixing();
 
   //Reset to wireframes if it was enabled
   if (globalRenderData.wireFrameMode)
@@ -773,6 +938,10 @@ void swapToFrameBufferAndDraw()
       glPolygonMode(GL_FRONT_AND_BACK, GL_LINE);  
     }
 
+  glBindFramebuffer(GL_FRAMEBUFFER, 0); // back to default  
+  glDrawArrays(GL_TRIANGLES, 0, 6); //Draw
+
+  
   //Draw debug console without post processing
   startGLTimer(&GPUImGUITimer);
   if (debugConsoleEnabled)
@@ -792,7 +961,7 @@ void swapToFrameBufferAndDraw()
   
   glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
   //Switch back to frameBuffer
-  glBindFramebuffer(GL_FRAMEBUFFER, globalRenderData.frontBuffer);
+  glBindFramebuffer(GL_FRAMEBUFFER, globalRenderData.colorHDRFrameBuffer);
   glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT); // we're not using the stencil buffer now
 
    glEnable(GL_DEPTH_TEST);

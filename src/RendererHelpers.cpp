@@ -77,11 +77,21 @@ void setVec3Uniform(s32 program, const char* name, vec3 values)
   s32 location = glGetUniformLocation(program, name);
   glUniform3f(location, values.x, values.y, values.z );  
 }
+void setVec2Uniform(s32 program, const char* name, vec2 values)
+{
+  s32 location = glGetUniformLocation(program, name);
+  glUniform2f(location, values.x, values.y );  
+}
 
 void setFloatUniform(s32 program, const char* name, float value)
 {
   s32 location = glGetUniformLocation(program, name);
   glUniform1f(location, value );  
+}
+void setIntUniform(s32 program, const char* name, int value)
+{
+  s32 location = glGetUniformLocation(program, name);
+  glUniform1i(location, value );  
 }
 
 void setLightUniform(s32 program)

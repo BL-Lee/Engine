@@ -61,7 +61,7 @@ struct INIS32DefaultEntry {
 
 static INIS32DefaultEntry IniS32DefaultEntries[] = {						    
   //Window
-  "frameBuffer_width", 540, &globalRenderData.frameBufferWidth, //TODO add logic to default to get width because retina dumb shit
+  "frameBuffer_width", 540, &globalRenderData.frameBufferWidth, 
   "frameBuffer_height",  360, &globalRenderData.frameBufferHeight,
 };
 struct INIStringDefaultEntry {
@@ -70,8 +70,7 @@ struct INIStringDefaultEntry {
   void* valueLocation;
 };
 
-static INIStringDefaultEntry IniStringDefaultEntries[] = {						    
-  //Renderer
+static INIStringDefaultEntry IniStringDefaultEntries[] = {					       //Renderer
 };
 
 static const char* iniTypeToFormatMappings[] = { "%d", "%d", "%s" };

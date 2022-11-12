@@ -50,6 +50,21 @@ struct DebugLine {
   u32 shapeID;
 };
 
+#define BLOOM_SAMPLE_COUNT 3
+struct BloomInfo {
+  u32 frameBuffer;
+  vec2 sizes[BLOOM_SAMPLE_COUNT];
+  u32 downSampleProgram;
+  u32 firstDownSampleProgram;
+  u32 upSampleProgram;
+  u32 mipTextures[BLOOM_SAMPLE_COUNT];
+  
+  u32 blendingProgram;
+  f32 strength;
+
+  f32 cutoff;
+};
+
 struct RendererData
 {
   u8 initialized;  
@@ -114,8 +129,8 @@ struct RendererData
   s32 dirLightCount;
 
   //Frame Buffer & post processing info
-  u32 frontBuffer;
-  u32 frontBufferTexture;
+  u32 colorHDRFrameBuffer;
+  u32 colorHDRFrameBufferTexture;
 
   u32 colourPaletteLUT;
   bool palettize;
@@ -157,6 +172,7 @@ struct RendererData
   u32 debugLineIndex;
   Mesh* debugGeometryMesh;
 
+  BloomInfo bloomInfo;
 
 };
 
