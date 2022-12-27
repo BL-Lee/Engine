@@ -33,7 +33,12 @@ struct Material
 
 uniform Material material;
 
-
+struct LightingPartials
+{
+  vec3 pointDiffuseAndSpecular;
+  vec3 ambient;
+  vec3 directionalDiffuseAndSpecular;
+};
 vec3 calcPointLightContributionDiffSpec(PointLight light, vec3 normal, vec3 fragPos, vec3 viewDir)
 {
   vec3 lightDir = normalize(light.position - fragPos);
@@ -75,4 +80,21 @@ vec3 calcDirLightContributionDiffSpec(DirectionalLight light, vec3 normal, vec3 
   specular *= material.specular;
   
   return specular + diffuse;
+}
+
+LightingPartials calcLightingPartials(vec3 worldPos, vec3 viewDir, vec3 normal)
+{
+  vec3 ambientOut = vec3(0.0);
+  LightingPartials partials = LightingPartials(vec3(0.0), vec3(0.0), vec3(0.0));
+  for (int i = 0; i < POINT_LIGHT_COUNT; i++)
+    {
+      partials.pointDiffuseAndSpecular += calcPointLightContributionDiffSpec(pointLights[i], normal, worldPos, viewDir);
+      partials.ambient += (pointLights[i].ambientColour * material.ambient);
+    }
+  for (int i = 0; i < DIRECTIONAL_LIGHT_COUNT; i++)
+    {
+      partials.directionalDiffuseAndSpecular += calcDirLightContributionDiffSpec(dirLights[i], normal, worldPos, viewDir);
+      partials.ambient += (dirLights[i].ambientColour * material.ambient);
+    }
+  return partials;
 }

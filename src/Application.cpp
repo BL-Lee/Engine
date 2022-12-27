@@ -141,6 +141,7 @@ Mesh* selectMesh(vec2 mouseCoords)
       Entity* pLight = getEntityById(globalRenderData.pointLights[1].entityGizmoID);
       pLight->position = hitLoc;
       addDebugLine(ray.origin, ray.origin + ray.direction * 5.0f, 5.0f);
+      globalDebugData.selectedEntityId = entitySelected;
     }
   return NULL;
 }

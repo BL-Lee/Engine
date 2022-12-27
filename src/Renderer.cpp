@@ -203,7 +203,7 @@ void initRendererColourPaletteLUT()
 
 u32 loadBloomShader(const char* fragmentShader)
 {
-  u32 programValue = loadAndValidateShaderPair("res/shaders/bloomVertex.glsl", fragmentShader );
+  u32 programValue = loadAndValidateShaderPair("res/shaders/bloom/bloomVertex.glsl", fragmentShader );
   glUseProgram(programValue);
   setIntUniform(programValue, "srcTexture", 0);
   return programValue;
@@ -229,9 +229,9 @@ void initBloomInfo()
       glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
       glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);      
     }
-  bloomInfo->downSampleProgram = loadBloomShader(   "res/shaders/bloomDownsample.glsl");
-  bloomInfo->firstDownSampleProgram = loadBloomShader("res/shaders/bloomFirstDownsample.glsl");
-  bloomInfo->upSampleProgram = loadBloomShader( "res/shaders/bloomUpsample.glsl");
+  bloomInfo->downSampleProgram = loadBloomShader(   "res/shaders/bloom/bloomDownsample.glsl");
+  bloomInfo->firstDownSampleProgram = loadBloomShader("res/shaders/bloom/bloomFirstDownsample.glsl");
+  bloomInfo->upSampleProgram = loadBloomShader( "res/shaders/bloom/bloomUpsample.glsl");
 
   glFramebufferTexture2D(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0,
 			 GL_TEXTURE_2D, bloomInfo->mipTextures[0], 0);
@@ -239,8 +239,8 @@ void initBloomInfo()
   unsigned int attachments[1] = { GL_COLOR_ATTACHMENT0 };
   glDrawBuffers(1, attachments);
 
-  bloomInfo->blendingProgram = loadAndValidateShaderPair("res/shaders/bloomVertex.glsl",
-							 "res/shaders/bloomMix.glsl");
+  bloomInfo->blendingProgram = loadAndValidateShaderPair("res/shaders/bloom/bloomVertex.glsl",
+							 "res/shaders/bloom/bloomMix.glsl");
   glUseProgram(bloomInfo->blendingProgram);
   setIntUniform(bloomInfo->blendingProgram, "srcTexture", 0);
   setIntUniform(bloomInfo->blendingProgram, "bloomTexture", 1);
@@ -304,14 +304,14 @@ void initRenderer()
 	case 0:
 	  {
 	    globalRenderData._shaderProgramKey[i] =
-	      loadAndValidateShaderPair("res/shaders/msdfVert.glsl",
-					"res/shaders/msdfFrag.glsl");
+	      loadAndValidateShaderPair("res/shaders/text/textMSDFVert.glsl",
+					"res/shaders/text/textMSDFFrag.glsl");
 	  }break;
 	case 1:
 	  {
 	    globalRenderData._shaderProgramKey[i] =
-	      loadAndValidateShaderPair("res/shaders/dynamicVert.glsl",
-					"res/shaders/dynamicFrag.glsl");
+	      loadAndValidateShaderPair("res/shaders/text/textBasicVert.glsl",
+					"res/shaders/text/textBasicFrag.glsl");
 	  }break;
 	default:
 	  {

@@ -18,6 +18,7 @@ struct GlobalDebugData
   f32 weightedMS;
   f32 weightedFPS;
   f32 xAxis[DEBUG_TIMING_HISTORY_LENGTH];
+  u32 selectedEntityId;
 };
 
 static GlobalDebugData globalDebugData;

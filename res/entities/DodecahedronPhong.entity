@@ -1,0 +1,7 @@
+#scale 0.1 0.1 0.1
+#position 0.0 0.0 0.0
+#rotation 0.0 0.0 0.0
+#angularVelocity 0.0 0.0 0.0
+#meshFile res/models/sphere.obj
+#vert res/shaders/basicPhongVertex.glsl
+#frag res/shaders/basicPhongFrag.glsl

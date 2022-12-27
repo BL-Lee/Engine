@@ -212,7 +212,9 @@ void drawDebugEntityConsole()
 */
 void drawDebugEntitiesConsole()
 {
+  
   if (ImGui::CollapsingHeader("Entities"))
+  //  ImGui::Begin("Entities");
     {
       ImGui::Checkbox("Show AABBs", (bool*)&globalDebugData.showAABB);
       ImGui::Indent();
@@ -222,6 +224,16 @@ void drawDebugEntitiesConsole()
 	    {
 	      Entity* e = globalEntityRegistry->entities + i;
 	      ImGui::PushID(e->id);
+	      if (e->id == globalDebugData.selectedEntityId)
+		{
+		  ImGui::SetNextTreeNodeOpen(true);
+		  globalRenderData.wireFrameMode = 1;
+		  for (int j = 0; j < e->meshCount; j++)
+		    {		  
+		      drawMesh(e->meshes[j], e->position, e->rotation, e->scale);
+		    }
+		  globalRenderData.wireFrameMode = 0;
+		}
 	      if (ImGui::CollapsingHeader(e->name))
 		{
 		  drawImGuiVec3Text(e->position, "Pos");
@@ -272,6 +284,7 @@ void drawDebugEntitiesConsole()
 	}
       ImGui::Unindent();
     }
+  //  ImGui::End();
 }  
 
 
@@ -297,9 +310,12 @@ void drawDebugConsole()
   for (int i = 0; i < arrows->meshCount; i++)
     {
       //drawMesh(arrows->meshes[i], arrows->position, arrows->rotation, arrows->scale);
-    }  
+    }
+
+
     
   ImGui::NewFrame();
+  //   ImGui::ShowDemoWindow();
   ImGui::Begin("Editor");
 
   ImGui::Text("Frame: %d, %.2f%%", anim->currentFrames[0], anim->currentInterps[0]);

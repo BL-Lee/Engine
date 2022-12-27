@@ -3,6 +3,6 @@
 #rotation 0.0 0.0 0.0
 
 #meshFile res/models/Only_Spider_with_Animations_Export.obj
-#vert res/shaders/basicLightVertex.glsl
-#frag res/shaders/basicLightFrag.glsl
+#vert res/shaders/basicFlatVertex.glsl
+#frag res/shaders/basicFlatFrag.glsl
 

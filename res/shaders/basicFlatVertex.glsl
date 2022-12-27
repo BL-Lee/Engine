@@ -27,20 +27,10 @@ void main()
   vec3 Normal = normalize(mat3(normalMatrix) * normal);
   vec3 viewDir = normalize(ViewPos - WorldPos);
   vec3 ambientOut = vec3(0.0);
-  for (int i = 0; i < POINT_LIGHT_COUNT; i++)
-    {
-      diffSpecOut += calcPointLightContributionDiffSpec(pointLights[i], Normal, WorldPos, viewDir);
-      ambientOut += (pointLights[i].ambientColour * material.ambient);
-    }
-  diffSpecPoint = diffSpecOut;
-  diffSpecOut = vec3(0.0);
-  for (int i = 0; i < DIRECTIONAL_LIGHT_COUNT; i++)
-    {
-      diffSpecOut += calcDirLightContributionDiffSpec(dirLights[i], Normal, WorldPos, viewDir);
-      ambientOut += (dirLights[i].ambientColour * material.ambient);
-    }
-  diffSpecDir = diffSpecOut;
-  ambient = ambientOut;
 
+  LightingPartials partials = calcLightingPartials(WorldPos, viewDir, Normal);
+  diffSpecDir = partials.directionalDiffuseAndSpecular;
+  diffSpecPoint = partials.pointDiffuseAndSpecular;
+  ambient = partials.ambient;
   lightSpaceCoords = lightSpaceMatrix * vec4(WorldPos, 1.0);
 }
