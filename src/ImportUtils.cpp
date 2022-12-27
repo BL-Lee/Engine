@@ -51,7 +51,6 @@ static INIU32DefaultEntry IniU32DefaultEntries[] = {
   "window_height", 720, &mainWindow.height,
   "vsync", 1, &mainWindow.vSyncOn,
   "refresh_rate",  60, &mainWindow.refreshRate,
-
 };
 struct INIS32DefaultEntry {
   char key[INI_KEY_MAX_LENGTH];

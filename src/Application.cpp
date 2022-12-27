@@ -126,16 +126,11 @@ static vec3 testRayOrigin;
 //Game related
 #include "CaveGeneration.cpp"
 
-Mesh* selectMesh(double mouse_x, double mouse_y)
+Mesh* selectMesh(vec2 mouseCoords)
 {
   f32 hitDist = FLT_MAX;
   vec3 hitLoc;
-  Ray ray;
-  vec4 zero = {0.0,0.0,0.0,1.0};
-  ray.origin = getCameraPos(&mainCamera);
-  
-  vec4 one = {0.0,0.0,-1.0,0.0};
-  ray.direction = (mainCamera.invViewMatrix * one).xyz;
+  Ray ray = rayFromScreenPoint(mouseCoords);
 
   Entity* entityHit = NULL;
   
@@ -145,14 +140,11 @@ Mesh* selectMesh(double mouse_x, double mouse_y)
       globalRenderData.pointLights[1].position = hitLoc;
       Entity* pLight = getEntityById(globalRenderData.pointLights[1].entityGizmoID);
       pLight->position = hitLoc;
+      addDebugLine(ray.origin, ray.origin + ray.direction * 5.0f, 5.0f);
     }
   return NULL;
 }
 
-//void selectMeshCallback(GLFWwindow* window, int button, int action, int mods)
-//{
-  //  selectMesh(
-//}
 void addDebugGizmo(vec3 location)
 {
   Entity* dodec = deserializeEntity("res/entities/LightGizmo.entity");
@@ -330,7 +322,7 @@ void processInputs()
       {
 	double xpos, ypos;
 	glfwGetCursorPos(mainWindow.glWindow, &xpos, &ypos);
-	selectMesh(xpos, ypos);
+	selectMesh({xpos, ypos});
       }	    
     }
   clearInputBuffer();
@@ -415,7 +407,6 @@ int initEngine()
   //Open window
    openWindow(mainWindow.height,
 	      mainWindow.width);
-   //openWindow(720, 1080);
   
   //Init input and renderer
   initInput();
@@ -504,7 +495,7 @@ int initEngine()
   anim = loadMD5Anim("res/models/bob_lamp_update.md5anim", bobMesh);
 
   bob = requestNewEntity("bob");
-  bob->position.y -= 4.0f;
+  /*bob->position.y -= 4.0f;
   bob->rotation.x = -3.14 / 2;
   bob->meshes = bobMesh->meshes;
   bob->meshCount = bobMesh->meshCount;
@@ -515,7 +506,7 @@ int initEngine()
        addMesh(bobMesh->meshes[i], "res/shaders/skinnedBasicLightVertex.glsl", "res/shaders/basicLightFrag.glsl", skinnedDefaultlayout, 6);
       loadMaterial("res/materials/defaultMaterial.mat", &bob->meshes[i]->material);
     }
-    setEntityAABBCollider(bob);
+    setEntityAABBCollider(bob);*/
     /*
 
   //TEMP: Generate cave

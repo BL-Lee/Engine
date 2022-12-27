@@ -863,8 +863,22 @@ void bloomMixing()
   glBindTexture(GL_TEXTURE_2D, globalRenderData.colorHDRFrameBufferTexture);
   glActiveTexture(GL_TEXTURE0 + 1);
   glBindTexture(GL_TEXTURE_2D, globalRenderData.bloomInfo.mipTextures[0]);
+  glActiveTexture(GL_TEXTURE0 + 2);
+  glBindTexture(GL_TEXTURE_3D, globalRenderData.colourPaletteLUT);
+  errCheck();
   setFloatUniform(globalRenderData.bloomInfo.blendingProgram, "bloomStrength", globalRenderData.bloomInfo.strength);
-
+  errCheck();
+  u32 location = glGetUniformLocation(globalRenderData.bloomInfo.blendingProgram, "blueNoise");
+  if (location != -1)
+    {
+      glUniform1i(location, 2);
+    }
+  location = glGetUniformLocation(globalRenderData.bloomInfo.blendingProgram, "palettize");
+  if (location != -1)
+    {
+      glUniform1i(location, globalRenderData.palettize);
+      }
+  errCheck();
     {
       //globalRenderData.luminanceTemporal = getAverageLuminanceOfFrameBuffer();
       //Calculate exposure value
@@ -872,9 +886,10 @@ void bloomMixing()
     }
   setFloatUniform(globalRenderData.bloomInfo.blendingProgram, "exposure", 0.5);
 
-
+    errCheck();
 
   glDrawArrays(GL_TRIANGLES, 0, 6); //Draw
+    errCheck();
 
 }
 

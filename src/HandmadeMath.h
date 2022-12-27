@@ -3450,7 +3450,7 @@ hmm_mat4 invertMat4(hmm_mat4* in)
   hmm_mat4 result;
   bool success = gluInvertMatrix((float*)&in, (float*)&result);
   if(!success){
-    printf("BVVV");
+    printf("BVVV\n");
   }
   return result;
 }

@@ -1,17 +1,11 @@
 #version 330 core
 
-//https://learnopengl.com/Guest-Articles/2022/Phys.-Based-Bloom
-
-// This shader performs upsampling on a texture,
-// as taken from Call Of Duty method, presented at ACM Siggraph 2014.
-
-// Remember to add bilinear minification filter for this texture!
-// Remember to use a floating-point texture format (for HDR)!
-// Remember to use edge clamping for this texture!
+uniform int palettize;
 uniform sampler2D srcTexture;
 uniform sampler2D bloomTexture;
 uniform float bloomStrength;
 uniform float exposure;
+uniform sampler3D blueNoise;
 in vec2 texCoord;
 layout (location = 0) out vec3 FragColour;
 
@@ -43,12 +37,12 @@ void main()
 
   mixedColour = pow(mapped, vec3(1.0 / gamma));
 
-  /*  if (palettize != 0)
+  if (palettize != 0)
     {
       vec3 map = mixedColour.rgb;      
       FragColour = texture(blueNoise, map).rgb;
     }
-    else*/
+    else
     {
       FragColour = mixedColour;
     }

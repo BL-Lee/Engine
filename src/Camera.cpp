@@ -111,3 +111,27 @@ void getFrustumCornersWorldSpace(vec4* viewSpaceCorners, Camera* c)
     }
 }
 
+Ray rayFromScreenPoint(vec2 mouseCoords)
+{
+  Ray ray;
+  vec4 zero = {0.0,0.0,0.0,1.0};
+  
+  //Will calculate invViewMatrix to get this
+  ray.origin = getCameraPos(&mainCamera);
+
+  //mouse coords from [-1,1]
+  vec2 mousePosCoords = { (mouseCoords.x / mainWindow.width) * 2 - 1, (mouseCoords.y / mainWindow.height) * 2 - 1} ;
+
+  //Ray from origin (camera eye) to point on the screen on far plane
+  //All camera space
+  vec4 rayDirCameraSpace = {
+    TanF(ToRadians(mainCamera.vertAngleOfView * 0.5)) * mainCamera.aspectRatio * mainCamera.farClip * mousePosCoords.x,
+    TanF(ToRadians(mainCamera.vertAngleOfView * 0.5)) * mainCamera.farClip * -mousePosCoords.y,
+    -mainCamera.farClip,
+    0.0
+  };
+
+  //Direction is that ray in world space
+  ray.direction = Normalize(mainCamera.invViewMatrix * rayDirCameraSpace).xyz;
+  return ray;
+}
