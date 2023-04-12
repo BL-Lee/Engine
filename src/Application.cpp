@@ -47,8 +47,6 @@ typedef int64_t  s64;
 typedef float    f32;
 typedef double   f64; 
 
-//-5.3 8.5 4.65
-
 //Handmade includes
 #define HMM_PREFIX
 #define HANDMADE_MATH_IMPLEMENTATION
@@ -67,7 +65,6 @@ static f64 globalDeltaTime;
 static f64 globalTimeScale = 1.0;
 static u32 defaultTexture;
 static u32 globalEntropy = 0x31415926;
-static bool debugConsoleEnabled = false;
 
 //Debug profiling
 #include "DebugConsole.h"
@@ -76,20 +73,20 @@ static GLTimer GPUUITimer;
 static GLTimer GPUImGUITimer;
 static f32 GPUTotalTime;
 
-//TODO: entity selection in debug
-static s32 entitySelected = -1;
-
-
 //Temp Global
 static f32 globalKerning = 1.0;
 static f32 fontSize = 1.0f;
 
 
 //Custom includes
+#include "Timer.h"
+//#include "Bitmap.cpp"
+#include "UI.h"
+
 #include "ImportUtils.cpp"
 #include "DebugLogging.cpp"
 #include "LinkedList.cpp"
-#include "Input.cpp"
+
 #include "Window.cpp"
 #include "Shader.cpp"
 #include "Collision.cpp"
@@ -102,13 +99,12 @@ static f32 fontSize = 1.0f;
 #include "Camera.cpp"
 #include "EntityRegistry.cpp"
 #include "Random.cpp"
-#include "Timer.h"
-//#include "Bitmap.cpp"
-#include "UI.cpp"
 #include "Font.cpp"
+static TextElement globalPopupText;
+#include "Input.cpp"
 #include "Scene.cpp"
-
-static u32 translationArrows;
+#include "DebugSelection.cpp"
+#include "ScreenSelect.cpp"
 static Entity* bob;
 static int bobFrame = 0;
 static SkinnedAnimation* anim;
@@ -119,39 +115,60 @@ static Entity* debugGizmoEntity;
 
 static Font* mainFont;
 
-static TextElement globalPopupText;
-static vec3 testRayDir;
-static vec3 testRayOrigin;
+
 
 //Game related
 #include "CaveGeneration.cpp"
 
-Mesh* selectMesh(vec2 mouseCoords)
-{
-  f32 hitDist = FLT_MAX;
-  vec3 hitLoc;
-  Ray ray = rayFromScreenPoint(mouseCoords);
 
-  Entity* entityHit = NULL;
-  
-  if (rayCastAllNaive(&ray, &hitDist, &hitLoc, &entityHit))
+
+
+
+void drawEntity(Entity* e, mat4* transform)
+{
+  if (!e->visible)
     {
-      entitySelected = entityHit->id;
-      globalRenderData.pointLights[1].position = hitLoc;
-      Entity* pLight = getEntityById(globalRenderData.pointLights[1].entityGizmoID);
-      pLight->position = hitLoc;
-      addDebugLine(ray.origin, ray.origin + ray.direction * 5.0f, 5.0f);
-      globalDebugData.selectedEntityId = entitySelected;
+      return;
     }
-  return NULL;
+  for (int j = 0; j < e->meshCount; j++)
+    {		  
+      Mesh* mesh = e->meshes[j];
+      if (mesh->visible)
+	drawMesh(mesh, transform);
+    }
+
+  if (e->children)
+    {
+      for (int i = 0; i < e->childCount; i++)
+	{
+	  //compounded transform
+	  Entity* child = e->children[i];
+	  mat4 childTransform = *transform * transformationMatrixFromComponents(child->position, child->scale, child->rotation);
+	  drawEntity(e->children[i], &childTransform);
+	}
+    }
 }
 
-void addDebugGizmo(vec3 location)
+void drawEntity(Entity* e)
 {
-  Entity* dodec = deserializeEntity("res/entities/LightGizmo.entity");
-  dodec->position = location;
+  mat4 transform = transformationMatrixFromComponents(e->position, e->scale, e->rotation);
+  drawEntity(e, &transform);
 }
 
+void drawAllEntities()
+{
+  for (int i = 0; i < MAX_REGISTRY_SIZE; i++)
+    {
+      if (globalEntityRegistry->occupiedIndices[i])
+	{
+	  Entity* e = globalEntityRegistry->entities + i;
+	  if (e->parent == NULL)
+	    {
+	      drawEntity(e);
+	    }
+	}
+    }
+}
 void renderWindow()
 {
   /* Render here */
@@ -172,29 +189,14 @@ void renderWindow()
   anim->currentInterps[0] = 1 - interp;
   anim->currentInterps[1] = interp;
 
+  if (globalInputBuffer->mouseHeld && globalDebugData.showConsole)
+    {
+      debugTranslateEntity();
+    }
+
   //Render Entities
   startGLTimer(&GPUMeshTimer);
-  for (int i = 0; i < MAX_REGISTRY_SIZE; i++)
-    {
-      if (globalEntityRegistry->occupiedIndices[i] && globalEntityRegistry->entities[i].meshes)
-	{
-	  Entity* e = globalEntityRegistry->entities + i;
-	  if (e->visible)
-	    {
-	      for (int j = 0; j < e->meshCount; j++)
-		{		  
-		  Mesh* mesh = e->meshes[j];
-		  if (mesh->visible)
-		    drawMesh(mesh, e->position, e->rotation, e->scale);
-		}
-	    }
-	}
-    }
-  //drawMesh(galRenderData.debugGeometryMesh, {0.0,0.0,0.0},{0.0,0.0,0.0},{1.0,1.0,1.0});
-  //addDebugRect({0.0,0.0,0.0},{1.0, 0.0, 1.0}, {0.0,1.0,1.0}, {0.0,1.0,0.0});
-  //glBindVertexArray(globalRenderData.debugGeometryMesh->rendererData.vertexArrayKey);
-  //VertexBuffer
-  
+  drawAllEntities();
   endGLTimer(&GPUMeshTimer);
     
   //UI
@@ -209,10 +211,30 @@ void renderWindow()
       globalPopupText.timeRemaining -= globalDeltaTime;
       printStringScreenSpace(mainFont, globalPopupText.string, globalPopupText.location, globalPopupText.size);
     }
+  Vertex vertices[4] =
+    {
+      {0.0,0.0,0.0},
+      {0.0,0.5,0.0},
+      {0.5,0.5,0.0},
+      {0.5,0.0,0.0}
+    };
+  addScreenSpaceQuad(vertices + 0, vertices + 1, vertices + 2, vertices + 3);
   rendererEndScene();
   endGLTimer(&GPUUITimer);
 
+  //Draw origin axes
+  vec3 originVertices[4] =
+    {
+      {0.0, 0.0, 0.0},
+      {1.0, 0.0, 0.0},
+      {0.0, 1.0, 0.0},
+      {0.0, 0.0, 1.0},
+    };
+  addDebugLine(originVertices[0], originVertices[1], originVertices[1], 0.0);
+  addDebugLine(originVertices[0], originVertices[2], originVertices[2], 0.0);
+  addDebugLine(originVertices[0], originVertices[3], originVertices[3], 0.0);
 
+  outlineSelectedMesh();
   //Draw with frame buffer
   swapToFrameBufferAndDraw();
 
@@ -226,107 +248,6 @@ void idleFunc()
   globalRenderData.pointLights[0].position.x = sin(globalStopWatch);
   globalRenderData.pointLights[0].position.z = cos(globalStopWatch);
   
-}
-
-void processInputs()
-{
-  /* Poll for and process events */
-  //glfwWaitEvents();
-  glfwPollEvents();
-
-  //Update timing info
-  f64 deltaTime = glfwGetTime() - globalStopWatch;
-  globalDeltaTime = deltaTime * globalTimeScale;
-  globalStopWatch = glfwGetTime();
-
-  //Camera Polling
-  if (pollInputKey(GLFW_KEY_A))
-    {	  
-      vec3 offset = {-5.0,0.0,0.0};
-      translateCameraLocal(&mainCamera, offset * globalDeltaTime);
-    }
-  if (pollInputKey(GLFW_KEY_D))
-    {
-      vec3 offset = {5.0,0.0,0.0};
-      translateCameraLocal(&mainCamera, offset * globalDeltaTime);
-    }
-  if (pollInputKey(GLFW_KEY_W))
-    {
-      vec3 offset = {0.0,0.0,-5.0};
-      translateCameraLocal(&mainCamera, offset * globalDeltaTime);
-    }
-  if (pollInputKey(GLFW_KEY_S))
-    {
-      vec3 offset = {0.0,0.0,5.0};
-      translateCameraLocal(&mainCamera, offset * globalDeltaTime);
-    }
-  if (pollInputKey(GLFW_KEY_RIGHT))
-    {	  
-      vec3 offset = {0.0,5.0,0.0};      
-      rotateCameraLocal(&mainCamera, offset * globalDeltaTime);
-    }
-  if (pollInputKey(GLFW_KEY_LEFT))
-    {
-      vec3 offset = {0.0,-5.0,0.0};
-      rotateCameraLocal(&mainCamera, offset * globalDeltaTime);
-    }
-  if (pollInputKey(GLFW_KEY_UP))
-    {	  
-      vec3 offset = {5.0,0.0,0.0};
-      rotateCameraLocal(&mainCamera, offset * globalDeltaTime);
-    }
-  if (pollInputKey(GLFW_KEY_DOWN))
-    {
-      vec3 offset = {-5.0,0.0,0.0};
-      rotateCameraLocal(&mainCamera, offset * globalDeltaTime);
-    }
-  if (pollInputKey(GLFW_KEY_P))
-    {
-      vec4 corners[8];
-      getFrustumCornersWorldSpace(corners, &mainCamera);
-      for (int i = 0; i < 8; i++)
-	{
-	  addDebugGizmo(corners[i].xyz);
-	}
-    }
-
-  //Keyboard Event Handling
-  for (int i = 0; i < globalInputBuffer->size; i++)
-    {
-      InputInfo info = globalInputBuffer->buffer[i];
-      //TEMP: Timescale buttons
-      if (info.key == GLFW_KEY_1 && info.action == GLFW_PRESS)
-	{
-	  globalTimeScale *= 2;
-	  snprintf(globalPopupText.string, 128, "Timescale: %.4f (%.3f ms)", globalTimeScale, globalTimeScale /  mainWindow.refreshRate);
-	  globalPopupText.timeRemaining = 2.00;	  
-	  globalPopupText.location.y = 0.3;
-	  globalPopupText.location.x = -0.9;
-	  globalPopupText.size = 20;
-
-	}
-      if (info.key == GLFW_KEY_2 && info.action == GLFW_PRESS)
-	{
-	  globalTimeScale /= 2;
-	  snprintf(globalPopupText.string, 128, "Timescale: %.4f (%.3f ms)", globalTimeScale, globalTimeScale / mainWindow.refreshRate);
-	  globalPopupText.timeRemaining = 2.00;	  
-	  globalPopupText.location.y = 0.3;
-	  globalPopupText.size = 20;
-	}
-      //Debug Console button
-      if (info.key == GLFW_KEY_GRAVE_ACCENT && info.action == GLFW_PRESS)
-	{
-	  debugConsoleEnabled = !debugConsoleEnabled;
-	}
-      //TODO: Entity selection
-      if (info.key == GLFW_MOUSE_BUTTON_LEFT && info.action == GLFW_PRESS)
-      {
-	double xpos, ypos;
-	glfwGetCursorPos(mainWindow.glWindow, &xpos, &ypos);
-	selectMesh({xpos, ypos});
-      }	    
-    }
-  clearInputBuffer();
 }
 
 void checkCollisions(Entity* e, int startingIndex)
@@ -459,10 +380,30 @@ int initEngine()
     }
 
   //TEMP: Arrows for entity selection
-  Entity* arrows = deserializeEntity("res/entities/Arrows.entity");
-  arrows->visible = false;
-  translationArrows = arrows->id;
+  Entity* arrows = deserializeEntity("res/entities/translationArrows.entity");
+  globalDebugData.translationArrowIds[0] = arrows->children[0]->id;
+  globalDebugData.translationArrowIds[1] = arrows->children[1]->id;
+  globalDebugData.translationArrowIds[2] = arrows->children[2]->id;
 
+  Entity* parentDodec = deserializeEntity("res/entities/Dodecahedron.entity");
+  Entity* childDodec = deserializeEntity("res/entities/Dodecahedron.entity");
+  Entity* grandDodec = deserializeEntity("res/entities/Dodecahedron.entity");
+  parentDodec->children = (Entity**)malloc(sizeof(Entity*));
+  parentDodec->children[0] = childDodec;
+  parentDodec->position.x = -3.0;
+  parentDodec->childCount = 1;
+  parentDodec->angularVelocity.x = 3.14;
+  childDodec->children = (Entity**)malloc(sizeof(Entity*));
+  childDodec->children[0] = grandDodec;
+  childDodec->childCount = 1;
+  childDodec->position.y = 1.0;
+  childDodec->scale.x = 1.0;  childDodec->scale.y = 1.0;  childDodec->scale.z = 1.0;
+  childDodec->parent = parentDodec;
+  childDodec->angularVelocity.z = 3.14;
+  grandDodec->position.x = 1.0;
+  grandDodec->scale.x = 1.0;  grandDodec->scale.y = 1.0;  grandDodec->scale.z = 1.0;
+  grandDodec->parent = childDodec;
+  
 
   //SkinnedMesh* spiderMesh = loadFBX("res/models/Spider.fbx");
 
@@ -496,7 +437,8 @@ int initEngine()
   anim = loadMD5Anim("res/models/bob_lamp_update.md5anim", bobMesh);
 
   bob = requestNewEntity("bob");
-  /*bob->position.y -= 4.0f;
+  bob->position.y -= 4.0f;
+  bob->position.x -= 4.0f;
   bob->rotation.x = -3.14 / 2;
   bob->meshes = bobMesh->meshes;
   bob->meshCount = bobMesh->meshCount;
@@ -504,10 +446,10 @@ int initEngine()
   for (int i = 0; i < bobMesh->meshCount; i++)
     {      
       calculateNormals(bobMesh->meshes[i]);
-       addMesh(bobMesh->meshes[i], "res/shaders/skinnedBasicLightVertex.glsl", "res/shaders/basicLightFrag.glsl", skinnedDefaultlayout, 6);
+       addMesh(bobMesh->meshes[i], "res/shaders/skinnedBasicLightVertex.glsl", "res/shaders/basicFlatFrag.glsl", skinnedDefaultlayout, 6);
       loadMaterial("res/materials/defaultMaterial.mat", &bob->meshes[i]->material);
     }
-    setEntityAABBCollider(bob);*/
+    setEntityAABBCollider(bob);
     /*
 
   //TEMP: Generate cave
@@ -519,6 +461,29 @@ int initEngine()
   loadMaterial("res/materials/defaultMaterial.mat", &cave->meshes[0]->material);
   */
 
+
+    /*    mat4 inTest = {
+      0.0, 1.0, 0.0, 0.0,
+      -1.0, 0.0, 0.0, 0.0,
+      0.0, 0.0, 0.0, 0.0,
+      0.0, 0.0, 0.0, 1.0
+    };
+    mat4 outTest = {
+      0.0, -1.0, 0.0, 2.0,
+      1.0, 0.0, 0.0, 0.0,
+      0.0, 0.0, 0.0, 0.0,
+      0.0, 0.0, 0.0, 1.0
+    };
+    mat4 result = invertMat4(&inTest);
+    for (int i = 0; i < 4; i++)
+      {
+	for (int j = 0; j < 4; j++)
+	  {
+	    Assert(result[i][j] == outTest[i][j]);
+	  }
+      }
+    */
+    
   loadScene("res/scenes/testImportModel.scene");
   //ploadScene("res/scenes/blankScene.scene");
   return 0;

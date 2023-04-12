@@ -10,15 +10,11 @@ void initDebugGeometryMesh()
   m->visible = true;
   u32 totalVertexCount = DEBUG_LINE_TO_VERTEX_COUNT * RENDERER_MAX_DEBUG_LINE_COUNT;
   m->vertices = malloc(sizeof(Vertex) * totalVertexCount);
-  globalRenderData.meshTransforms[0] = {0.0,0.0,0.0};
-  globalRenderData.meshTransforms[1] = {0.0,0.0,0.0};
-  globalRenderData.meshTransforms[2] = {1.0,1.0,1.0};  
-
-  //m->indices = (u32*) malloc(sizeof(u32) * totalVertexCount);
+  globalRenderData.meshModelMatrices[0] = Mat4d(1.0f);
 
   m->vertexCount = totalVertexCount;
   addMesh(m, "res/shaders/normalVisVertex.glsl", "res/shaders/normalVisFrag.glsl");
-  //addMesh(m, "res/shaders/basicLightVertex.glsl", "res/shaders/basicLightFrag.glsl");
+
   m->vertexCount = 0;
   m->rendererData.indexCount = 0;
 }
@@ -109,6 +105,12 @@ u32 addDebugLineBox(vec3 min, vec3 max, f32 lifeTime)
 {
   vec3 colour = {0.0, 1.0, 0.0};
   return addDebugLineBox(min, max, colour, lifeTime);
+}
+
+u32 addDebugLineBox(vec3 min, vec3 max)
+{
+  vec3 colour = {0.0, 1.0, 0.0};
+  return addDebugLineBox(min, max, colour, 0.0);
 }
 
 

@@ -7,7 +7,7 @@
 #pointLightDiffuse 1.0 0.1 0.1
 #pointLightAmbient 0.1 0.0 0.0
 #pointLightSpecular 1.0 0.3 0.3
-#pointLightIntensity 0.5
+#pointLightIntensity 100.0
 #newPointLight
 #pointLightDiffuse 0.1 1.0 0.75
 #pointLightAmbient 0.1 0.0 0.3

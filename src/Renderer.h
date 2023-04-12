@@ -161,9 +161,12 @@ struct RendererData
   u32 depthShader;
 
   u32 blueNoiseTex;
-
+  
+  //First index is for debug geometry
   Mesh* meshesToDraw[RENDERER_MESH_DRAW_COUNT];
-  vec3 meshTransforms[RENDERER_MESH_DRAW_COUNT * 3];
+   //Deprecated, will only store transformation matrices now
+  //vec3 meshTransforms[RENDERER_MESH_DRAW_COUNT * 3];
+
   mat4 meshModelMatrices[RENDERER_MESH_DRAW_COUNT];
   u32 meshesToDrawCount;
 

@@ -1,5 +1,5 @@
 #include "DebugConsole.h"
-
+//#include "DebugConsoleStyle.cpp"
 void initGeneralDebugInfo()
 {
   globalDebugData.wrappedGraphIndex = 0;
@@ -11,7 +11,8 @@ void initGeneralDebugInfo()
     }
   globalDebugData.weightedMS = 0.0f;
   globalDebugData.weightedFPS = 0.0f;
-  globalDebugData.showAABB = true;
+  globalDebugData.showAABB = false;
+  globalDebugData.showConsole = false;
 }
 
 void updateGeneralDebugInfo()
@@ -68,17 +69,17 @@ void deleteGLTimer(GLTimer* timer)
   errCheck();
 }
 
-void drawImGuiRGBSlider(vec3* vec, f32 min, f32 max)
+bool isHoveringDebugConsole()
 {
-  ImGui::SliderFloat("R: ", &vec->x, min, max);
-  ImGui::SliderFloat("G: ", &vec->y, min, max);
-  ImGui::SliderFloat("B: ", &vec->z, min, max);  
+  ImGuiIO& io = ImGui::GetIO();
+  return io.WantCaptureMouse;
 }
+
 void drawImGuiXYZSlider(vec3* vec, f32 min, f32 max)
 {
-  ImGui::SliderFloat("X: ", &vec->x, min, max);
-  ImGui::SliderFloat("Y: ", &vec->y, min, max);
-  ImGui::SliderFloat("Z: ", &vec->z, min, max);  
+  ImGui::PushID(vec);
+  ImGui::SliderFloat3("", &vec->x, min, max);
+  ImGui::PopID();
 }
 
 void drawImGuiVec3Text(vec3 vec, const char* prefix)
@@ -109,7 +110,7 @@ void drawDebugLightConsole()
 		  }
 		if(ImGui::CollapsingHeader("Colour"))
 		  {
-		    drawImGuiRGBSlider(&p->diffuseColour, 0.0f, 1.0f);
+		    drawImGuiXYZSlider(&p->diffuseColour, 0.0f, 1.0f);
 		  }
 		ImGui::SliderFloat("Intensity: ", &p->intensity, 0.0f, 100.0f);
 	      }
@@ -134,7 +135,7 @@ void drawDebugLightConsole()
 		  }
 		if(ImGui::CollapsingHeader("Colour"))
 		  {
-		    drawImGuiRGBSlider(&p->diffuseColour, 0.0, 1.0);
+		    drawImGuiXYZSlider(&p->diffuseColour, 0.0, 1.0);
 		  }
 	      }
 	      {
@@ -224,18 +225,14 @@ void drawDebugEntitiesConsole()
 	    {
 	      Entity* e = globalEntityRegistry->entities + i;
 	      ImGui::PushID(e->id);
-	      if (e->id == globalDebugData.selectedEntityId)
+	      /*if (e->id == globalDebugData.selectedEntityId)
 		{
 		  ImGui::SetNextTreeNodeOpen(true);
-		  globalRenderData.wireFrameMode = 1;
-		  for (int j = 0; j < e->meshCount; j++)
-		    {		  
-		      drawMesh(e->meshes[j], e->position, e->rotation, e->scale);
-		    }
-		  globalRenderData.wireFrameMode = 0;
-		}
+		  }*/
 	      if (ImGui::CollapsingHeader(e->name))
 		{
+		  drawImGuiXYZSlider(&e->position, -10.0, 10.0);
+		  drawImGuiXYZSlider(&e->scale, 0.0, 3.0);
 		  drawImGuiVec3Text(e->position, "Pos");
 		  int indexCount = 0;
 		  int vertexCount = 0;
@@ -287,36 +284,8 @@ void drawDebugEntitiesConsole()
   //  ImGui::End();
 }  
 
-
-/*   Debug Console     */
-void drawDebugConsole()
+void drawMainDebugMenu()
 {
-  for (int i = 0; i < RENDERER_POINT_LIGHT_COUNT; i++)
-    {
-      Entity* gizmo = getEntityById(globalRenderData.pointLights[i].entityGizmoID);
-      for (int j = 0; j < gizmo->meshCount; j++)
-	{
-	  drawMesh( gizmo->meshes[j],
-		    globalRenderData.pointLights[i].position,
-		    gizmo->rotation,
-		    gizmo->scale );
-	}
-    }
-
-  glClear(GL_DEPTH_BUFFER_BIT);  
-  
-  //Anything that should be drawn ontop of everything
-  Entity* arrows = getEntityById(translationArrows);
-  for (int i = 0; i < arrows->meshCount; i++)
-    {
-      //drawMesh(arrows->meshes[i], arrows->position, arrows->rotation, arrows->scale);
-    }
-
-
-    
-  ImGui::NewFrame();
-  //   ImGui::ShowDemoWindow();
-  ImGui::Begin("Editor");
 
   ImGui::Text("Frame: %d, %.2f%%", anim->currentFrames[0], anim->currentInterps[0]);
   ImGui::Text("Frame: %d, %.2f%%", anim->currentFrames[1], anim->currentInterps[1]);
@@ -421,9 +390,142 @@ void drawDebugConsole()
   drawDebugLightConsole();
   drawDebugEntitiesConsole();
       
+  
+}
+
+void drawDebugEntityInspector()
+{
+  Entity* e = getEntityById(globalDebugData.selectedEntityId);
+  if (!e) return;
+  ImGui::PushID(e->id);
+  ImGui::Text("Name: %s", e->name);
+  if(e->parent)
+    {
+      if (ImGui::Button("Select Parent"))
+	{
+	  ImGui::PopID();
+	  globalDebugData.selectedEntityId = e->parent->id;
+	  return;
+	}
+    }
+  char header[64];
+  sprintf(header, "Children (%d)", e->childCount);
+  if(ImGui::CollapsingHeader(header))
+    {
+      for (int i = 0; i < e->childCount; i++)
+	{
+	  ImGui::PushID(e->children[i]->id);
+	  if(ImGui::Button(e->children[i]->name))
+	    {
+	      ImGui::PopID();
+	      ImGui::PopID();
+	      globalDebugData.selectedEntityId = e->children[i]->id;
+	      return;
+	    }
+	  ImGui::PopID();
+	}
+    }
+  ImGui::Text("Position:");
+  drawImGuiXYZSlider(&e->position, -10.0, 10.0);
+  ImGui::Text("Scale:");
+  drawImGuiXYZSlider(&e->scale, 0.0, 3.0);
+  ImGui::Text("Rotation:");
+  drawImGuiXYZSlider(&e->rotation, 0.0, 360.0);
+
+  int indexCount = 0;
+  int vertexCount = 0;
+  for (int m = 0; m < e->meshCount; m++)
+    {
+      indexCount += e->meshes[m]->rendererData.indexCount;
+      vertexCount += e->meshes[m]->vertexCount;
+    }
+		    
+  ImGui::Text("Vertex Count: %d", vertexCount);
+  ImGui::Text("Index Count: %d", indexCount);
+  ImGui::Checkbox("Visible", (bool*)&e->visible);
+  ImGui::Indent();
+  if (ImGui::CollapsingHeader("mesh debug info"))
+    {
+      for (int m = 0; m < e->meshCount; m++)
+	{
+	  ImGui::PushID(m);
+	  ImGui::Text("indexCount: %d",e->meshes[m]->rendererData.indexCount);
+	  ImGui::Text("vertCount: %d",e->meshes[m]->vertexCount);
+	  ImGui::Checkbox("Visible", (bool*)&e->meshes[m]->visible);
+	  ImGui::PopID();
+	}
+    }
+  if (ImGui::CollapsingHeader("PhysicsInfo"))
+    {
+      ImGui::Checkbox("Gravity", (bool*)&e->gravityEnabled);
+      ImGui::Checkbox("Physics Enabled", (bool*)&e->physicsEnabled);
+	      
+      drawImGuiVec3Text(e->position, "Position");
+      drawImGuiVec3Text(e->rotation, "Rotation");
+      drawImGuiVec3Text(e->scale, "Scale");
+      drawImGuiVec3Text(e->velocity, "Velocity");
+    }
+  if (ImGui::CollapsingHeader("CollisionInfo"))
+    {
+      ImGui::Text("AABB");
+      drawImGuiVec3Text(e->collider.aabb.min, "min");
+      drawImGuiVec3Text(e->collider.aabb.max, "max");
+    }
+
+  ImGui::Unindent();
+  ImGui::PopID();
+}
+  
+
+
+/*   Debug Console     */
+void drawDebugConsole()
+{
+  for (int i = 0; i < RENDERER_POINT_LIGHT_COUNT; i++)
+    {
+      Entity* gizmo = getEntityById(globalRenderData.pointLights[i].entityGizmoID);
+      for (int j = 0; j < gizmo->meshCount; j++)
+	{
+	  drawMesh( gizmo->meshes[j],
+		    globalRenderData.pointLights[i].position,
+		    gizmo->rotation,
+		    gizmo->scale );
+	}
+    }
+
+  glClear(GL_DEPTH_BUFFER_BIT);  
+  
+  //Anything that should be drawn ontop of everything
+  /*Entity* arrows = getEntityById(translationArrows);
+  for (int i = 0; i < arrows->meshCount; i++)
+    {
+      //drawMesh(arrows->meshes[i], arrows->position, arrows->rotation, arrows->scale);
+      }*/
+
+
+    
+  ImGui::NewFrame();
+  ImGui::ShowDemoWindow();
+  ImGui::Begin("Editor");
+  if(ImGui::BeginTabBar("Tabs"))
+    {
+      if(ImGui::BeginTabItem("Menu"))
+	{
+	  drawMainDebugMenu();
+	  ImGui::EndTabItem();
+	}
+      if(ImGui::BeginTabItem("Entity Inspector"))
+	{
+	  drawDebugEntityInspector();
+	  ImGui::EndTabItem();
+	}
+      ImGui::EndTabBar();
+    }
+  
   ImGui::End();
 
   ImGui::Render();
   ImGui_ImplOpenGL3_RenderDrawData(ImGui::GetDrawData());
+
 
 }

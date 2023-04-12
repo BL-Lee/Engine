@@ -7,9 +7,15 @@ struct Entity
 {
   u32 id;
   char name[256];
+  struct Entity* parent;
+  struct Entity** children;
+  u32 childCount;
+  u32 childArraySize;
   vec3 position;
   vec3 scale;
   vec3 rotation;
+  mat4 globalTransform;
+  bool globalTransformDirty;
   vec3 velocity;
   vec3 angularVelocity;
   Mesh** meshes;
@@ -25,7 +31,7 @@ struct Entity
   Collider collider;
 };
 
-#define MAX_REGISTRY_SIZE 2048
+#define MAX_REGISTRY_SIZE 512
 
 struct EntityRegistry
 {
@@ -36,7 +42,7 @@ struct EntityRegistry
 };
 
 static EntityRegistry* globalEntityRegistry;
-
+mat4 getEntityGlobalTransform(Entity* e);
 
 
 #endif

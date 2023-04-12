@@ -206,7 +206,7 @@ u32 rayTriangleCollision(Ray* ray, Triangle* tri, vec3* location)
   return rayTriangleCollision(ray, tri, NULL, location);
 }
 
-
+//Move all vertices into world space
 u32 rayMeshCollisionNaive(Ray* ray, Mesh* mesh, mat4* transMatrix, f32* hit, vec3* loc)
 {
   //CAUTION: DOES NTO WORK WITH SKINNED MESHES YET
@@ -261,20 +261,76 @@ u32 rayMeshCollisionNaive(Ray* ray, Mesh* mesh, mat4* transMatrix, f32* hit, vec
     }
   return hasHit;
 }
+//Move ray into mesh space
+u32 rayMeshCollision(Ray* ray, Mesh* mesh, mat4* transMatrix, f32* hit, vec3* loc)
+{
+  //CAUTION: DOES NTO WORK WITH SKINNED MESHES YET
+  u32 hasHit = 0;
+  Ray meshSpaceRay;
+  vec4 meshSpaceDir = {ray->direction, 0.0};
+  vec4 meshSpaceOrigin = {ray->origin, 1.0};
+  mat4 invTransform = invertMat4(transMatrix);
+  meshSpaceRay.direction = (invTransform * meshSpaceDir).xyz;
+  meshSpaceRay.origin = (invTransform * meshSpaceOrigin).xyz;
+
+  for (int index = 0; index < mesh->rendererData.indexCount; index+=3)
+    {
+      //THESE ARE NOT IN WORLD SPACE YET
+      vec3 positions[3];
+      Vertex* vertices = (Vertex*)mesh->vertices;
+      if (mesh->indices)
+	{
+	  positions[0] =  vertices[mesh->indices[index + 0]].pos;
+	  positions[1] =  vertices[mesh->indices[index + 1]].pos;
+	  positions[2] =  vertices[mesh->indices[index + 2]].pos;
+	}
+      else
+	{
+	  positions[0] = vertices[index + 0].pos;
+	  positions[1] = vertices[index + 1].pos;
+	  positions[2] = vertices[index + 2].pos;
+	}
+		      
+      Triangle tri;
+      tri.v0 = positions[0];
+      tri.v1 = positions[1];
+      tri.v2 = positions[2];      
+
+      f32 tHit = FLT_MAX;
+      vec3 tLoc;
+      if (rayTriangleCollision(&meshSpaceRay, &tri, &tHit, &tLoc))
+	{
+	  //Bit unintuitive, but this will make it so if you pass in a minimum distance in hit
+	  //It will discard any hits that are above that length
+	  if (tHit < *hit && tHit > 0.0f)
+	    {
+	      *hit = tHit;
+	      *loc = tLoc;
+	      hasHit = 1;
+	    }
+	}
+    }
+  if (hasHit)
+    {
+      vec4 meshToWorldSpaceLocation = {*loc, 1.0};
+      *loc = (*transMatrix * meshToWorldSpaceLocation).xyz;
+    }
+  return hasHit;
+}
 
 u32 rayEntityCollisionNaive(Ray* ray, Entity* e, f32* hit, vec3* loc)
 {
 
   u32 hasHit = 0;
   
-  mat4 modelMatrix = transformationMatrixFromComponents(e->position, e->scale, e->rotation);
+  mat4 modelMatrix = getEntityGlobalTransform(e);//transformationMatrixFromComponents(e->position, e->scale, e->rotation);
 
   for (int me = 0; me < e->meshCount; me++)
     {
       Mesh* mesh = e->meshes[me];
       f32 meshHit = FLT_MAX;
       vec3 meshLoc;
-      if (rayMeshCollisionNaive(ray, mesh, &modelMatrix, &meshHit, &meshLoc))
+      if (rayMeshCollision(ray, mesh, &modelMatrix, &meshHit, &meshLoc))
 	{
 	  //Bit unintuitive, but this will make it so if you pass in a minimum distance in hit
 	  //It will discard any hits that are above that length
@@ -334,9 +390,21 @@ u32 rayCastAllNaive(Ray* ray, f32* hit, vec3* loc)
 
  *****************************/
 
+AABBCollider getWorldSpaceAABBCollider(Entity* e)
+{
+  vec4 min = {e->collider.aabb.min, 1.0};
+  vec4 max = {e->collider.aabb.max, 1.0};
+  mat4 transform = getEntityGlobalTransform(e);
+
+  vec3 minWorld = (transform * min).xyz;
+  vec3 maxWorld = (transform * max).xyz;
+  AABBCollider result = {minWorld, maxWorld};
+  return result;
+}
+
 void setEntityAABBCollider(Entity* e)
 {
-  mat4 transformation = transformationMatrixFromComponents(e->position, e->scale, e->rotation);
+  mat4 transformation = getEntityGlobalTransform(e);//transformationMatrixFromComponents(e->position, e->scale, e->rotation);
   vec3 max = {-FLT_MAX, -FLT_MAX, -FLT_MAX};
   vec3 min = {FLT_MAX, FLT_MAX, FLT_MAX};
   for (int i = 0; i < e->meshCount; i++)

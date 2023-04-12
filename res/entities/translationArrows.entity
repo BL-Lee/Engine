@@ -1,0 +1,6 @@
+#position 0.0 2.0 0.0
+#scale 1.0 1.0 1.0
+#rotation 0.0 0.0 0.0
+#child res/entities/xAxisArrow.entity
+#child res/entities/yAxisArrow.entity
+#child res/entities/zAxisArrow.entity

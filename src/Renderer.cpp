@@ -21,6 +21,8 @@ Look into this
 
 
 //Switch the shader type for future renderer calls
+//UHHHH not being set back properly
+//eg: vertexBufferPtr not equaling _vertexBufferPtr[i];
 void setRendererShaderMode(u32 i)
 {
   globalRenderData._vertexBufferPtr[globalRenderData.currentShaderIndex] = globalRenderData.vertexBufferPtr;
@@ -485,9 +487,14 @@ void drawMesh(Mesh* mesh, vec3 position, vec3 rotation, vec3 scale)
 {
   Assert(globalRenderData.meshesToDrawCount < RENDERER_MESH_DRAW_COUNT);
   globalRenderData.meshesToDraw[globalRenderData.meshesToDrawCount] = mesh;
-  globalRenderData.meshTransforms[globalRenderData.meshesToDrawCount * 3 + 0] = position;
-  globalRenderData.meshTransforms[globalRenderData.meshesToDrawCount * 3 + 1] = rotation;
-  globalRenderData.meshTransforms[globalRenderData.meshesToDrawCount * 3 + 2] = scale;  
+  globalRenderData.meshModelMatrices[globalRenderData.meshesToDrawCount] = transformationMatrixFromComponents(position, scale, rotation);  
+  globalRenderData.meshesToDrawCount++;
+}
+void drawMesh(Mesh* mesh, mat4* transform)
+{
+  Assert(globalRenderData.meshesToDrawCount < RENDERER_MESH_DRAW_COUNT);
+  globalRenderData.meshesToDraw[globalRenderData.meshesToDrawCount] = mesh;
+  globalRenderData.meshModelMatrices[globalRenderData.meshesToDrawCount] = *transform;
   globalRenderData.meshesToDrawCount++;
 }
 
@@ -660,9 +667,6 @@ void renderPass(mat4* lightMatrix)
   for (int i = 0; i < globalRenderData.meshesToDrawCount; i++)
     {
       Mesh* mesh = globalRenderData.meshesToDraw[i];
-      vec3 position = globalRenderData.meshTransforms[i * 3 + 0];
-      vec3 rotation = globalRenderData.meshTransforms[i * 3 + 1];
-      vec3 scale = globalRenderData.meshTransforms[i * 3 + 2];
       //Bind this mesh's arrays
       glBindVertexArray(mesh->rendererData.vertexArrayKey);
       glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, mesh->rendererData.indexBufferKey);
@@ -727,14 +731,14 @@ void flushMeshesAndRender()
     }
 
     //Calculate all the mesh matrices and stuff
-  for (int i = 0; i < globalRenderData.meshesToDrawCount; i++)
+  /*  for (int i = 0; i < globalRenderData.meshesToDrawCount; i++)
     {
       Mesh* mesh = globalRenderData.meshesToDraw[i];
       vec3 position = globalRenderData.meshTransforms[i * 3 + 0];
       vec3 rotation = globalRenderData.meshTransforms[i * 3 + 1];
       vec3 scale = globalRenderData.meshTransforms[i * 3 + 2];
-      globalRenderData.meshModelMatrices[i] = transformationMatrixFromComponents(position, scale, rotation);
-    }
+      globalRenderData.meshModelMatrices[i] = transformationMatrixFromComponents(position, scale, rotation);  
+      }*/
   vec3 lightPos = globalRenderData.dirLights[0].direction;
   /*mat4 lightProjection = Orthographic(
 				      -8.0f, 8.0f,
@@ -959,7 +963,7 @@ void swapToFrameBufferAndDraw()
   
   //Draw debug console without post processing
   startGLTimer(&GPUImGUITimer);
-  if (debugConsoleEnabled)
+  if (globalDebugData.showConsole)
     {
       drawDebugConsole();
     }

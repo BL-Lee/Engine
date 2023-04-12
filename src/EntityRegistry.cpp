@@ -13,14 +13,20 @@ Entity* requestNewEntity()
       if (!g->occupiedIndices[index])
 	{
 	  g->occupiedIndices[index] = 1;
-	  g->entities[index].id = g->entityCounter;
-	  g->entities[index].visible = true;
-	  g->entities[index].vertShader = NULL;
-	  g->entities[index].fragShader = NULL;
-	  g->entities[index].scale.x = 1.0;
-	  g->entities[index].scale.y = 1.0;
-	  g->entities[index].scale.z = 1.0;
-	  sprintf(g->entities[index].name, "ENTITY %d", g->entityCounter);
+	  Entity* e = g->entities + index;
+	  e->id = g->entityCounter;
+	  e->visible = true;
+	  e->vertShader = NULL;
+	  e->fragShader = NULL;
+	  e->scale.x = 1.0;
+	  e->scale.y = 1.0;
+	  e->scale.z = 1.0;
+	  e->childCount = 0;
+	  e->children = NULL;
+	  e->childArraySize = 0;
+	  e->parent = NULL;
+	  e->globalTransformDirty = true;
+	  sprintf(e->name, "ENTITY %d", g->entityCounter);
 	  return g->entities + index;
 	}
       Assert(g->entityCounter != 0xFFFFFFFF);
@@ -54,6 +60,23 @@ void setEntityName(Entity* e, const char* name)
   strcpy(e->name, name);
 }
 
+void addChildToEntity(Entity* parent, Entity* child)
+{
+  if (!parent->children)
+    {
+      parent->children = (Entity**)malloc(sizeof(Entity*));
+      parent->childArraySize = 1;
+      parent->childCount = 0;
+    }
+  else if (parent->childArraySize == parent->childCount)
+    {
+      parent->children = (Entity**)realloc(parent->children, sizeof(Entity*) * parent->childArraySize * 2);
+      parent->childArraySize *= 2;
+    }
+  parent->children[parent->childCount++] = child;
+  child->parent = parent;      	
+}
+
 Entity* getEntityById(u32 id)
 {
   if (globalEntityRegistry->occupiedIndices[id % MAX_REGISTRY_SIZE])
@@ -70,8 +93,15 @@ void deleteEntity(u32 id)
       fprintf(stderr,"ERROR: cannot delete entity with id %d. Already deleted\n", id);
       return;
     }
-  //Assert(globalEntityRegistry->occupiedIndices[id % MAX_REGISTRY_SIZE]);
+
   Entity* e = &globalEntityRegistry->entities[id % MAX_REGISTRY_SIZE];
+  if (e->children) {
+    for (int i = 0; i < e->childCount; i++)
+      {
+	deleteEntity(e->children[i]->id);
+      }
+    free(e->children);
+  }
   if (e->vertShader)
       free(e->vertShader);
   if (e->fragShader)
@@ -112,7 +142,12 @@ Entity* deserializeEntity(const char* filename)
   char buffer[512];
   while (fgets(buffer, 512, fileHandle))
     {
-      if (strstr(buffer, "#position"))
+      if (strstr(buffer, "#child"))
+	{
+	  u32 ret = sscanf(buffer, "#child %s", buffer);	  
+	  addChildToEntity(entity, deserializeEntity(buffer));
+	}
+      else if (strstr(buffer, "#position"))
 	{
 	  entity->position = loadVec3Line("#position", buffer);
 	}
@@ -120,9 +155,15 @@ Entity* deserializeEntity(const char* filename)
 	{
 	  entity->scale = loadVec3Line("#scale", buffer);
 	}
+      //in degrees
       else if (strstr(buffer, "#rotation"))
 	{
-	  entity->rotation = loadVec3Line("#rotation", buffer);
+	  vec3 rotation = loadVec3Line("#rotation", buffer);
+	  for (int axis = 0; axis < 3; axis++)
+	    {
+	      rotation[axis] = ToRadians(rotation[axis]);
+	    }
+	  entity->rotation = rotation;
 	}
       else if (strstr(buffer, "#velocity"))
 	{
@@ -169,8 +210,8 @@ Entity* deserializeEntity(const char* filename)
 		}
 	    }
 	}
-    }
-  if (!entity->meshes[0]->material.name)
+    }  
+  if (entity->meshes && !entity->meshes[0]->material.name)
     {
       for (int i = 0; i < entity->meshCount; i++)
 	{
@@ -188,7 +229,32 @@ Entity* deserializeEntity(const char* filename)
   return entity;
 }
 
+Entity* getEntityRootParent(Entity* e)
+{
+  if (e->parent)
+    {
+      return getEntityRootParent(e->parent);
+    }
+  return e;
+}
 
+
+mat4 getEntityGlobalTransform(Entity* e)
+{
+  mat4 transform = transformationMatrixFromComponents(e->position, e->scale, e->rotation);
+  if (e->parent)
+    {
+      return getEntityGlobalTransform(e->parent) * transform;
+    }
+  return transform;
+}
+
+vec3 getEntityGlobalPosition(Entity* e)
+{
+  mat4 transform = getEntityGlobalTransform(e);
+  vec4 p = {e->position, 1.0};  
+  return (transform * p).xyz;
+}
 
 Entity* createEntityFromTriangles(Vertex* vertices, u32 vertexCount, u32* indices, u32 indexCount)
 {

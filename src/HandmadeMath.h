@@ -3448,10 +3448,11 @@ bool gluInvertMatrix(const float m[16], float invOut[16])
 hmm_mat4 invertMat4(hmm_mat4* in)
 {
   hmm_mat4 result;
-  bool success = gluInvertMatrix((float*)&in, (float*)&result);
+  bool success = gluInvertMatrix((float*)in, (float*)&result);
   if(!success){
     printf("BVVV\n");
   }
+  
   return result;
 }
 
@@ -3484,15 +3485,17 @@ void decomposeTransform(hmm_mat4 in, hmm_vec3* pos, hmm_vec3* scale, hmm_quatern
   *rot = Mat4ToQuaternion(in);  
 }
 
+
+
 hmm_mat4 transformationMatrixFromComponents(hmm_vec3 position, hmm_vec3 scale, hmm_vec3 rotation)
 {
-  hmm_mat4 modelMatrix = 
-    {
+  hmm_mat4 modelMatrix = //Translate(position) * Scale(scale);
+      {
       scale.x,    0.0,              0.0,              0.0,
       0.0,              scale.y,    0.0,              0.0,
       0.0,              0.0,              scale.z,    0.0,
       position.x, position.y, position.z, 1.0
-    };
+      };
   float a = rotation.x;
   float b = rotation.y;
   float c = rotation.z;
@@ -3516,11 +3519,24 @@ hmm_mat4 transformationMatrixFromComponents(hmm_vec3 position, hmm_vec3 scale, h
       sin(-c), cos(-c), 0, 0,
       0, 0, 1, 0,
       0, 0, 0, 1
-    };
+      };
+  //  hmm_vec3 xAxis = {1.0,0.0,0.0};  hmm_vec3 yAxis = {0.0,1.0,0.0};  hmm_vec3 zAxis = {0.0,0.0,1.0};
+  
+  /*  hmm_mat4 rotationMatrix = Mat4d(1.0);
+  rotationMatrix = rotationMatrix * Rotate(rotation.x, xAxis);
+  rotationMatrix = rotationMatrix * Rotate(rotation.y, yAxis);
+  rotationMatrix = rotationMatrix * Rotate(rotation.z, zAxis);*/
   hmm_mat4 rotationMatrix = rotationXMatrix * rotationYMatrix * rotationZMatrix;
    
   return modelMatrix * rotationMatrix;		
 
 }
+/*hmm_mat4 inverseTransformMatrix(hmm_mat4 in)
+{
+  hmm_vec3 pos, rot, scale;
+  decomposeTransform(in, &pos, &scale, &rot);
+  hmm_vec3 one = {1.0, 1.0, 1.0};
+  return transformationMatrixFromComponents(pos * -1, one / scale, rotation * -1);
+  }*/
 
 #endif /* HANDMADE_MATH_MENTATION */
