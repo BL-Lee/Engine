@@ -4,20 +4,31 @@
 void initDebugGeometryMesh()
 {
   Mesh* m = (Mesh*)calloc(1, sizeof(Mesh));
-  globalRenderData.meshesToDraw[0] = m;
-  globalRenderData.debugGeometryMesh = globalRenderData.meshesToDraw[0];
-  globalRenderData.meshesToDrawCount = 1;
   m->visible = true;
   u32 totalVertexCount = DEBUG_LINE_TO_VERTEX_COUNT * RENDERER_MAX_DEBUG_LINE_COUNT;
   m->vertices = malloc(sizeof(Vertex) * totalVertexCount);
-  globalRenderData.meshModelMatrices[0] = Mat4d(1.0f);
-
   m->vertexCount = totalVertexCount;
-  addMesh(m, "res/shaders/normalVisVertex.glsl", "res/shaders/normalVisFrag.glsl");
+  m->indices = (u32*)malloc(sizeof(u32) * totalVertexCount);
+  for(int i = 0; i < totalVertexCount; i++)
+    {
+      m->indices[i] = i;
+    }
+  //Set to the max so that the buffers are set to the correct size
+  m->indexCount = totalVertexCount;
+  m->vertexCount = totalVertexCount;
 
+  globalRenderData.debugGeometryVAO.maxVertexCount = totalVertexCount;
+  globalRenderData.debugGeometryVAO.maxIndexCount = totalVertexCount;
+  initVAO(&globalRenderData.debugGeometryVAO, sizeof(DebugGeometryVertex), debugGeometryLayout, 2);
+  
+  addMesh(m, "res/shaders/debugGeometryVert.glsl", "res/shaders/debugGeometryFrag.glsl", debugGeometryLayout, &globalRenderData.debugGeometryVAO);
   m->vertexCount = 0;
-  m->rendererData.indexCount = 0;
+  m->indexCount = 0;
+
+  globalRenderData.debugGeometryMesh = m;
+  
 }
+
 void initDebugLineBuffer() {
   for (int i = 0; i < RENDERER_MAX_DEBUG_LINE_COUNT; i++)
     {
@@ -43,7 +54,27 @@ void drawDebugGeometry()
 	    }
 	}      
     }
+
+  RendererVAOInfo vao = globalRenderData.debugGeometryVAO;
+  glBindVertexArray(vao.key);
+  
   _updateDebugLineBuffers();
+
+
+
+  glBindVertexArray(vao.key);
+  glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, vao.IBKey);
+  RendererMeshVAOInfo* meshInfo = vao.meshInfoHead;
+  glUseProgram(meshInfo->programKey);
+  s32 location = glGetUniformLocation(meshInfo->programKey, "vpMatrix");
+  mat4 vpMatrix = mainCamera.projectionMatrix * mainCamera.viewMatrix;
+  glUniformMatrix4fv(location, 1, GL_FALSE, (float*)&vpMatrix);
+
+  glDrawElements(GL_TRIANGLES, globalRenderData.debugGeometryMesh->indexCount,
+		 GL_UNSIGNED_INT, 0);
+
+  globalRenderData.debugGeometryMesh->vertexCount = 0;
+  globalRenderData.debugGeometryMesh->indexCount = 0;
 }
 
 
@@ -117,15 +148,17 @@ u32 addDebugLineBox(vec3 min, vec3 max)
 
 void _updateDebugLineBuffers()
 {
-  glBindBuffer(GL_ARRAY_BUFFER, globalRenderData.debugGeometryMesh->rendererData.vertexBufferKey);
-  glBufferData(GL_ARRAY_BUFFER, sizeof(Vertex) * globalRenderData.debugGeometryMesh->vertexCount, globalRenderData.debugGeometryMesh->vertices, GL_DYNAMIC_DRAW);
+  glBindBuffer(GL_ARRAY_BUFFER, globalRenderData.debugGeometryVAO.VBOKey);
+  //glBufferData(GL_ARRAY_BUFFER, sizeof(DebugGeometryVertex) * globalRenderData.debugGeometryMesh->vertexCount, globalRenderData.debugGeometryMesh->vertices, GL_DYNAMIC_DRAW);
+  glBufferSubData(GL_ARRAY_BUFFER, 0, sizeof(DebugGeometryVertex) * globalRenderData.debugGeometryMesh->vertexCount, globalRenderData.debugGeometryMesh->vertices);
+  //Supposedly should use subdata
 }
 
 
 void _drawDebugRect(vec3 c0, vec3 c1, vec3 c2, vec3 c3, vec3 colour)
 {
 
-  Vertex* vertices = (Vertex*)globalRenderData.debugGeometryMesh->vertices;
+  DebugGeometryVertex* vertices = (DebugGeometryVertex*)globalRenderData.debugGeometryMesh->vertices;
   Mesh* m = globalRenderData.debugGeometryMesh;
   
   //If assertion hits, run out of debug lines, try increasing the buffer in renderer.h or using less
@@ -142,10 +175,9 @@ void _drawDebugRect(vec3 c0, vec3 c1, vec3 c2, vec3 c3, vec3 colour)
 
   for (int i =0 ; i< 6; i++)
     {
-      vertices[m->vertexCount + i].normal = colour; //Uses normal as colour, since we're not doing shading anyways
-      //m->indices[m->vertexCount + i] = m->vertexCount + i;
+      vertices[m->vertexCount + i].colour = colour;
     }
-  m->rendererData.indexCount += 6;
+  m->indexCount += 6;
   m->vertexCount += 6;
 }
 

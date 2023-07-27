@@ -6,11 +6,11 @@ uniform bool palettize;
 
 #define PCF_SHADOWS 1
 #define SHADOWS 1
-#define POISSON_SHADOWS_STRATIFIED 1
+#define POISSON_SHADOWS_STRATIFIED 0
 
 //https://learnopengl.com/Advanced-Lighting/Shadows/Shadow-Mapping
 
-flat in vec3 ambient;
+in vec3 ambient;
 flat in vec3 diffSpecDir;
 flat in vec3 diffSpecPoint;
 in vec4 lightSpaceCoords;
@@ -21,7 +21,6 @@ out vec4 outColour;
 
 void main()
 {
-
 #if SHADOWS
   // perform perspective divide
   vec3 projCoords = lightSpaceCoords.xyz / lightSpaceCoords.w;

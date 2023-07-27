@@ -13,6 +13,7 @@ char* loadRawShaderFile(const char* file)
     {
       //Log when logging is made
       fprintf(stderr,"WARNING: Could not open shader file: %s\n",file);
+      perror("Failed");
       return NULL;;
     }
   char* buffer = (char*)malloc(sizeof(char) * MAX_SHADER_BUFFER_SIZE);

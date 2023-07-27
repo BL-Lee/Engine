@@ -35,11 +35,13 @@ void initGLTimer(GLTimer* timer)
 }
 void startGLTimer(GLTimer* timer)
 {
+  return;
   glBeginQuery(GL_TIME_ELAPSED, timer->query);
   errCheck();
 }
 void endGLTimer(GLTimer* timer)
 {
+  return;
   glEndQuery(GL_TIME_ELAPSED);
   errCheck();
 }
@@ -71,8 +73,7 @@ void deleteGLTimer(GLTimer* timer)
 
 bool isHoveringDebugConsole()
 {
-  ImGuiIO& io = ImGui::GetIO();
-  return io.WantCaptureMouse;
+  return globalDebugData.ImGuiIo->WantCaptureMouse;
 }
 
 void drawImGuiXYZSlider(vec3* vec, f32 min, f32 max)
@@ -138,16 +139,16 @@ void drawDebugLightConsole()
 		    drawImGuiXYZSlider(&p->diffuseColour, 0.0, 1.0);
 		  }
 	      }
-	      {
+	           {
 		// Using a Child allow to fill all the space of the window.
 		// It also alows customization
 		ImGui::BeginChild("GameRender");
 		// Get the size of the child (i.e. the whole draw size of the windows).
 		ImVec2 wsize = ImGui::GetWindowSize();
 		// Because I use the texture from OpenGL, I need to invert the V from the UV.
-		ImGui::Image((ImTextureID)globalRenderData.shadowMapTexture, wsize, ImVec2(0, 1), ImVec2(1, 0));
+		ImGui::Image((ImTextureID)globalRenderData.shadowMapFBO.textureKey, wsize, ImVec2(0, 1), ImVec2(1, 0));
 		ImGui::EndChild();
-	      }
+		}
 	      ImGui::PopID();
 	    }
 	  ImGui::PopID();
@@ -217,6 +218,7 @@ void drawDebugEntitiesConsole()
   if (ImGui::CollapsingHeader("Entities"))
   //  ImGui::Begin("Entities");
     {
+      ImGui::Text("Total Entities: %d", globalEntityRegistry->entityCount);
       ImGui::Checkbox("Show AABBs", (bool*)&globalDebugData.showAABB);
       ImGui::Indent();
       for (int i = 0; i < MAX_REGISTRY_SIZE; i++)
@@ -333,15 +335,15 @@ void drawMainDebugMenu()
   //Renderer info
   if (ImGui::CollapsingHeader("Renderer"))
     {
-      ImGui::SliderFloat("Bloom Strength: %f", &globalRenderData.bloomInfo.strength, 0.0f, 1.0f);
-      ImGui::SliderFloat("Bloom Cutoff: %f", &globalRenderData.bloomInfo.cutoff, 0.0f, 1.0f);
+      //ImGui::SliderFloat("Bloom Strength: %f", &globalRenderData.bloomInfo.strength, 0.0f, 1.0f);
+      //ImGui::SliderFloat("Bloom Cutoff: %f", &globalRenderData.bloomInfo.cutoff, 0.0f, 1.0f);
       ImGui::Text("Viewport: %d %d", globalRenderData.viewportWidth, globalRenderData.viewportHeight);
-      ImGui::Text("Frame Buffer: %d %d", globalRenderData.frameBufferWidth, globalRenderData.frameBufferHeight);
+      ImGui::Text("outputFBO: %d %d", globalRenderData.outputFBO.width, globalRenderData.outputFBO.height);
       //Wireframe
       ImGui::Checkbox("Wireframes" , &globalRenderData.wireFrameMode);
-      ImGui::Checkbox("Palettize" , &globalRenderData.palettize);
+      //ImGui::Checkbox("Palettize" , &globalRenderData.palettize);
       //Index counts for renderer buffers
-      for (int i = 0; i < RENDERER_BUFFER_COUNT; i++)
+      /*      for (int i = 0; i < RENDERER_BUFFER_COUNT; i++)
 	{
 	  switch(i)
 	    {
@@ -354,9 +356,9 @@ void drawMainDebugMenu()
 	    }
 	  ImGui::Text("Index Count: %d", globalRenderData._indexCount[i]);
 	}
-
+      */
       //PostProcessing values
-      ImGui::ColorEdit4("Average Color:", &globalRenderData.averageColour.x);
+      /*ImGui::ColorEdit4("Average Color:", &globalRenderData.averageColour.x);
       ImGui::Text("Exposure: %f", globalRenderData.exposure);
       ImGui::SliderFloat("Exposure Rate: %f", &globalRenderData.exposureChangeRate, 0.0f, 10.0f);
       if(ImGui::ListBoxHeader("PostProcessingShaders"))
@@ -373,7 +375,7 @@ void drawMainDebugMenu()
 	    }
 	  ImGui::ListBoxFooter();
 	}
-
+      */
       //Vsync
       if (ImGui::Checkbox("Toggle Vsync", (bool*)&mainWindow.vSyncOn))
 	setVSync(mainWindow.vSyncOn);
@@ -486,10 +488,10 @@ void drawDebugConsole()
       Entity* gizmo = getEntityById(globalRenderData.pointLights[i].entityGizmoID);
       for (int j = 0; j < gizmo->meshCount; j++)
 	{
-	  drawMesh( gizmo->meshes[j],
+	  /*drawMesh( gizmo->meshes[j],
 		    globalRenderData.pointLights[i].position,
 		    gizmo->rotation,
-		    gizmo->scale );
+		    gizmo->scale );*/
 	}
     }
 

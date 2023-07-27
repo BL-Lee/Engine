@@ -2,52 +2,95 @@
 
 #include "Skinned.cpp"
 #include "Renderer.h"
-#include "RendererTextures.cpp"
+//#include "RendererTextures.cpp"
 #include "RendererHelpers.cpp"
-#include "RendererPrimitives.cpp"
+//#include "RendererPrimitives.cpp"
 #include "RendererDebugGeometry.cpp"
 #include "Camera.h"
-#include "Palette.cpp"
+//#include "Palette.cpp"
 /* TODO
 
-   Consider having one big buffer that it copies data into, 
-that way the binding wouldnt have to switch as much? idk,
-Also that way it would just be 1 draw call for shadow maps.
-Look into this
 
- --Update: probably one bigger one for static meshes, and keep track
- of where they are in the buffer, and small ones for dhnamic meshes
+             Renderer
+      /                   \                             
+      Framebuffer        VAO info       
+     /\                       /                               \ 
+ Texture/renderbuffer      VAOs (for every vertex format)     Mesh Info, indices into Index/vertex, shader?
+                               /         |
+                             IndexBuffer VertexBuffer       
+
+
+
+      Init renderer()
+         Setup VAOs
+	     1. Standard meshes
+	     2. Skinned meshes
+	     3. Full screen final quad
+	     4. Debug geometry?
+	 Set Framebuffers
+	     1. For output (tex for colour, renderbuffer for depth)
+	     2. Shadow map (tex)
+	     3. Bloom (textures)
+	     4. other post processing?
+
+
+      Mesh pipeline
+      
+      addMesh(mesh, shaders, vertex layout)
+         1. find what layout matches the VAO
+	 2. Find spot in buffer for the data
+	 3. validate shader
+	 4. generate mapping in vao, return vao id, mesh id
+
+      drawMesh(mesh, transform)
+         1. find mesh in mesh info
+	 2. probably add to list of ids to draw? w/ transform
+
+      removeMesh(meshId)
+         1. find info.
+	 2. delete that info
+              
+
+      Renderer pipeline
+
+      flushMeshesAndRender()
+         1. calc light info
+	 2. bind appropriate frame buffer
+	 2. shadow map pass w/ list of mesh ids
+	 3. Render pass w/ mesh ids
+	 5. bind full screen quad
+	 4. bind frame buffers / textures for postprocessing
+	 5. post processing
+	 6. Bind output frame buffer
+	 7. draw, swap buffer
+	 8. clear mesh ids to draw
+
+
+
  */
 
+/*
 
-//Switch the shader type for future renderer calls
-//UHHHH not being set back properly
-//eg: vertexBufferPtr not equaling _vertexBufferPtr[i];
-void setRendererShaderMode(u32 i)
-{
-  globalRenderData._vertexBufferPtr[globalRenderData.currentShaderIndex] = globalRenderData.vertexBufferPtr;
-  Assert(i < RENDERER_BUFFER_COUNT);
-  globalRenderData.texturesToBind = globalRenderData._texturesToBind[i];
-  globalRenderData.texturesToBindCount = &globalRenderData._texturesToBindCount[i];
-  globalRenderData.vertexBufferBase = globalRenderData._vertexBufferBase[i];
-  globalRenderData.vertexBufferPtr = globalRenderData._vertexBufferPtr[i];
-  globalRenderData.indexBufferBase = globalRenderData._indexBufferBase[i];
-  globalRenderData.indexOffset = globalRenderData._indexOffset + i;
-  globalRenderData.indexCount = globalRenderData._indexCount + i;
-  globalRenderData.vertexBufferKey = globalRenderData._vertexBufferKey[i];
-  globalRenderData.indexBufferKey = globalRenderData._indexBufferKey[i];
-  globalRenderData.vertexArrayKey = globalRenderData._vertexArrayKey[i];
-  globalRenderData.shaderProgramKey = globalRenderData._shaderProgramKey[i];
-  globalRenderData.currentShaderIndex = i;
-}
+  TODO: One VAO per vertex format
+  
+eg:
 
+        Mesh VAO (big VBO buffer, big Index buffer)
+	Skinned mesh VAO (big VBO buffer, big Index buffer)
+	
+	Mesh will then have pointers into the big buffers saying start and end indices
+	    then glDrawElements on that portion of the buffers
+
+
+*/
 
 /* 
 
-   Frame buffer functions
+  Post processing Frame buffer functions
 
  */
-void initializeFrameBufferShaders()
+/*
+void initializePostProcessingFrameBufferShaders()
 {
 
   globalRenderData.postProcessingShaders[0] =
@@ -67,45 +110,50 @@ void initializeFrameBufferShaders()
 			       "res/shaders/screen_auto_exposure.glsl");
 }
 
-void setFrameBufferShader(int shader)
+void setPostProcessingFrameBufferShader(int shader)
 {
   globalRenderData.frameBufferShader = globalRenderData.postProcessingShaders[shader];
 }
-			
-void initializeFrameBuffers(u32 framebufferWidth, u32 framebufferHeight)
+*/
+void genFramebuffer(GLuint* buffer)
 {
-  if (globalRenderData.frameBufferHeight == -1 || globalRenderData.frameBufferWidth == -1)
-    {
-      globalRenderData.frameBufferHeight = framebufferHeight;
-      globalRenderData.frameBufferWidth = framebufferWidth;
-    }
+  glGenFramebuffers(1, buffer);
+  glBindFramebuffer(GL_FRAMEBUFFER, *buffer);
+}
+void gen2DTexture(GLuint* tex)
+{
+   //generate texture
+  glGenTextures(1, tex);
+  glBindTexture(GL_TEXTURE_2D, *tex);
+}
+//Assumes to be bound already
+void set2DTexture(GLenum type, u32 width, u32 height, GLenum internalType, GLenum sampleType, GLenum wrap)
+{
+  glTexImage2D(GL_TEXTURE_2D, 0, type,
+	       width, height,
+	       0, internalType, GL_FLOAT, NULL);
+  glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, sampleType);
+  glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, sampleType);
+  glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, wrap);
+  glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, wrap);
+}
 
-  //Gen frame buffer
-  glGenFramebuffers(1, &globalRenderData.colorHDRFrameBuffer);
-  glBindFramebuffer(GL_FRAMEBUFFER, globalRenderData.colorHDRFrameBuffer);
-  
-  // generate texture
-  glGenTextures(1, &globalRenderData.colorHDRFrameBufferTexture);
-  glBindTexture(GL_TEXTURE_2D, globalRenderData.colorHDRFrameBufferTexture);
-  glTexImage2D(GL_TEXTURE_2D, 0, GL_R11F_G11F_B10F,
-	       globalRenderData.frameBufferWidth, globalRenderData.frameBufferHeight,
-	       0, GL_RGB, GL_FLOAT, NULL);
-  glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
-  glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
-  glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
-  glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);      
+void genGenericBuffer(GLuint* buffer, GLenum type, u32 size, void* data, GLenum drawType)
+{
+  glGenBuffers(1, buffer);
+  glBindBuffer(type, *buffer);
+  glBufferData(type, size, data, drawType);  
+}
 
-  //Bind texture
-  glFramebufferTexture2D(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_TEXTURE_2D, globalRenderData.colorHDRFrameBufferTexture, 0);
 
-  //Generate renderbuffer
-  unsigned int rbo;
-  glGenRenderbuffers(1, &rbo);
-  glBindRenderbuffer(GL_RENDERBUFFER, rbo); 
-  glRenderbufferStorage(GL_RENDERBUFFER, GL_DEPTH24_STENCIL8, globalRenderData.frameBufferWidth, globalRenderData.frameBufferHeight);  
+void genRenderBuffer(GLuint* buffer, GLenum type, GLenum bindType, u32 width, u32 height)
+{
+  glGenRenderbuffers(1, buffer);
+  glBindRenderbuffer(GL_RENDERBUFFER, *buffer); 
+  glRenderbufferStorage(GL_RENDERBUFFER, type, width, height);  
 
   //Bind render buffer
-  glFramebufferRenderbuffer(GL_FRAMEBUFFER, GL_DEPTH_STENCIL_ATTACHMENT, GL_RENDERBUFFER, rbo);
+  glFramebufferRenderbuffer(GL_FRAMEBUFFER, bindType, GL_RENDERBUFFER, *buffer);
 
   //Validate
   if(glCheckFramebufferStatus(GL_FRAMEBUFFER) != GL_FRAMEBUFFER_COMPLETE)
@@ -113,20 +161,198 @@ void initializeFrameBuffers(u32 framebufferWidth, u32 framebufferHeight)
       fprintf(stderr,"WARNING: FRONT BUFFER FAILED INIT\n");
       fprintf(stderr, "ERRCODE: %d\n", glCheckFramebufferStatus(GL_FRAMEBUFFER));
     }
+  
+}
 
-  //Set shaders for post processing
-  initializeFrameBufferShaders();
-  globalRenderData.frameBufferShader = globalRenderData.postProcessingShaders[2];
+void initOutputFBO()
+{
+  if (globalRenderData.outputFBO.width == -1 || globalRenderData.outputFBO.height == -1)
+    {
+      globalRenderData.outputFBO.width = globalRenderData.viewportWidth;
+      globalRenderData.outputFBO.height = globalRenderData.viewportWidth;
+    }
+
+  //Gen frame buffer
+  genFramebuffer(&globalRenderData.outputFBO.key);
+  gen2DTexture(&globalRenderData.outputFBO.textureKey);
+  set2DTexture(GL_R11F_G11F_B10F, globalRenderData.outputFBO.width, globalRenderData.outputFBO.height, GL_RGB, GL_NEAREST, GL_REPEAT);
+  //Bind texture
+  glFramebufferTexture2D(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_TEXTURE_2D, globalRenderData.outputFBO.textureKey, 0);
+
+  u32 rbo;
+  genRenderBuffer(&rbo, GL_DEPTH24_STENCIL8, GL_DEPTH_STENCIL_ATTACHMENT, globalRenderData.outputFBO.width, globalRenderData.outputFBO.height);
+
+  glGenerateMipmap(GL_TEXTURE_2D);
+}
+
+void initShadowMapInfo()
+{
+  //FBO 
+  globalRenderData.shadowMapFBO.width = 1024;
+  globalRenderData.shadowMapFBO.height = 1024;
+
+  genFramebuffer(&globalRenderData.shadowMapFBO.key);
+  gen2DTexture(&globalRenderData.shadowMapFBO.textureKey);
+  set2DTexture(GL_DEPTH_COMPONENT, globalRenderData.shadowMapFBO.width, globalRenderData.shadowMapFBO.height, GL_DEPTH_COMPONENT, GL_LINEAR, GL_REPEAT);
+  
+  glFramebufferTexture2D(GL_FRAMEBUFFER, GL_DEPTH_ATTACHMENT, GL_TEXTURE_2D, globalRenderData.shadowMapFBO.textureKey, 0);
+  glDrawBuffer(GL_NONE);
+  glReadBuffer(GL_NONE);
+
+  //SHADERS
+  //Should probably be in the mesh info
+  globalRenderData.shadowMapShader = loadAndValidateShaderPair("res/shaders/shadowMapVert.glsl",
+							       "res/shaders/shadowMapFrag.glsl");
+  globalRenderData.skinnedShadowMapShader = loadAndValidateShaderPair("res/shaders/skinnedShadowMapVert.glsl",
+  								      "res/shaders/shadowMapFrag.glsl");
+  
+  globalRenderData.depthShader = loadAndValidateShaderPair("res/shaders/screenShadervert.glsl",
+							   "res/shaders/depthFrag.glsl");
+}
 
 
-  //DISPLAY BUFFER
-  //Generate gpu buffers for full screen quad
+void initVAO(RendererVAOInfo* info, u32 vertexSize, VertexLayoutComponent* layout, u32 layoutCount)
+{
+
+    //Generate gpu buffers
   //Array
-  glGenVertexArrays(1, &globalRenderData.frameBufferQuadVAO);
-  glBindVertexArray(globalRenderData.frameBufferQuadVAO);
+  glGenVertexArrays(1, &info->key);
+  glBindVertexArray(info->key);
+    errCheck();
   //VertexBuffer
-  glGenBuffers(1, &globalRenderData.frameBufferVB);
-  glBindBuffer(GL_ARRAY_BUFFER, globalRenderData.frameBufferVB);
+  genGenericBuffer(&info->VBOKey, GL_ARRAY_BUFFER,
+		   vertexSize * info->maxVertexCount, NULL,
+		   GL_DYNAMIC_DRAW);
+  //IndexBuffer
+  genGenericBuffer(&info->IBKey, GL_ELEMENT_ARRAY_BUFFER,
+		   sizeof(u32) * info->maxIndexCount, NULL,
+		   GL_DYNAMIC_DRAW);
+  //generatez gpu vertex layout
+   u64 currentOffset = 0;
+  for (int i = 0; i < layoutCount; i++)
+    {
+      glEnableVertexAttribArray(layout[i].location);
+          errCheck();
+	  glVertexAttribPointer(layout[i].location, layout[i].count, layout[i].type, GL_FALSE, vertexSize, (const void*)layout[i].offset);
+	  
+          errCheck();
+      currentOffset += layout[i].size;
+    }
+    errCheck();
+  info->vertexSize = vertexSize;
+
+  info->meshesToDrawCount = 0;
+  info->meshInfoCount = 0;
+  info->layout = layout;
+  info->layoutCount = layoutCount;
+  errCheck();
+}
+
+void resizeVAO(RendererVAOInfo* info, f32 scale)
+{
+
+  //Generate gpu buffers
+  //Array
+  glBindVertexArray(info->key);
+
+
+  errCheck();
+  //VertexBuffer
+  u32 newVBOKey;
+  genGenericBuffer(&newVBOKey, GL_ARRAY_BUFFER,
+		   (u32)(info->vertexSize * info->maxVertexCount * scale), NULL,
+		   GL_DYNAMIC_DRAW);
+  u32 newIBKey;
+  //IndexBuffer
+  genGenericBuffer(&newIBKey, GL_ELEMENT_ARRAY_BUFFER,
+		   (u32)(sizeof(u32) * info->maxIndexCount * scale), NULL,
+		   GL_DYNAMIC_DRAW);
+  
+  glBindBuffer           (GL_COPY_READ_BUFFER, info->VBOKey);
+  glBindBuffer           (GL_COPY_WRITE_BUFFER, newVBOKey);  
+  glCopyBufferSubData    (GL_COPY_READ_BUFFER, GL_COPY_WRITE_BUFFER, 0, 0,
+			  info->vertexSize * info->maxVertexCount);
+
+  glBindBuffer           (GL_COPY_READ_BUFFER, info->IBKey);
+  glBindBuffer           (GL_COPY_WRITE_BUFFER, newIBKey);  
+  glCopyBufferSubData    (GL_COPY_READ_BUFFER, GL_COPY_WRITE_BUFFER, 0, 0,
+			 sizeof(u32) * info->maxIndexCount);
+
+			  
+  info->maxVertexCount = (u32)(scale * info->maxVertexCount);
+  info->maxIndexCount = (u32)(scale * info->maxIndexCount);
+
+  printf("Vert: %ud, Ind: %ud\n", info->maxVertexCount, info->maxIndexCount);
+			  
+  glDeleteBuffers(1, &info->IBKey);
+  glDeleteBuffers(1, &info->VBOKey);
+
+  glBindBuffer(GL_ARRAY_BUFFER, newVBOKey);
+  glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, newIBKey);
+
+  //Attrib location is bound along with the buffer, not the vao. So need to rebind this
+  VertexLayoutComponent* layout = info->layout;  
+  u64 currentOffset = 0;
+  for (int i = 0; i < info->layoutCount; i++)
+    {
+      glEnableVertexAttribArray(layout[i].location);
+      errCheck();
+      glVertexAttribPointer(layout[i].location, layout[i].count, layout[i].type, GL_FALSE, info->vertexSize, (const void*)layout[i].offset);
+      
+      errCheck();
+      currentOffset += layout[i].size;
+    }
+
+  
+  errCheck();
+  info->IBKey = newIBKey;
+  info->VBOKey = newVBOKey;
+}
+
+void initRenderer()
+{
+  stbi_set_flip_vertically_on_load(1);
+  
+  globalRenderData.wireFrameMode = 0;
+  globalRenderData.initialized = 1;
+  
+  //globalRenderData.exposure = 0.2f;
+  //globalRenderData.luminanceTemporal = 1.0f;
+  //globalRenderData.exposureChangeRate = 1.0f;
+
+  globalRenderData.dirLightCount = -1;
+  globalRenderData.pointLightCount = -1;
+
+  
+  glfwGetFramebufferSize(mainWindow.glWindow, &globalRenderData.viewportWidth, &globalRenderData.viewportHeight);
+
+#if DEBUG_INIT_STATS
+  printf("VIEWPORT WIDTH/HEIGHT: %d %d\n", globalRenderData.viewportHeight, globalRenderData.viewportWidth);
+#endif
+
+  //FBOs --------------------
+  initOutputFBO();
+  initShadowMapInfo();
+
+  errCheck();
+
+  //VAOs ---------------------
+  globalRenderData.standardVAO.maxVertexCount = RENDERER_STANDARD_VAO_VBO_MAX_COUNT;
+  globalRenderData.standardVAO.maxIndexCount = RENDERER_STANDARD_VAO_VBO_MAX_COUNT;
+  initVAO(&globalRenderData.standardVAO, sizeof(Vertex), defaultLayout, 4);
+  //globalRenderData.standardVAO.meshesToDraw = (RendererMeshVAOInfo*)calloc(sizeof(RendererMeshVAOInfo), RENDERER_STANDARD_VAO_MESH_MAX_COUNT);
+  globalRenderData.standardVAO.meshInfoCount = 0;
+    errCheck();
+  globalRenderData.skinnedVAO.maxVertexCount = RENDERER_SKINNED_VAO_VBO_MAX_COUNT;
+  globalRenderData.skinnedVAO.maxIndexCount = RENDERER_SKINNED_VAO_VBO_MAX_COUNT;
+  initVAO(&globalRenderData.skinnedVAO, sizeof(SkinnedVertex), skinnedDefaultLayout, 6);
+  //globalRenderData.skinnedVAO.meshesToDraw = (RendererMeshVAOInfo*)calloc(sizeof(RendererMeshVAOInfo), RENDERER_SKINNED_VAO_MESH_MAX_COUNT);
+  globalRenderData.skinnedVAO.meshInfoCount = 0;
+    errCheck();
+  globalRenderData.screenQuadVAO.maxVertexCount = 6;
+  globalRenderData.screenQuadVAO.maxIndexCount = 6;
+  initVAO(&globalRenderData.screenQuadVAO, sizeof(vec2) * 2, screenDefaultLayout, 2);
+  errCheck();
   float frameBufferVertices[4 * 6] =
     {
       -1.0, -1.0, 0.0, 0.0,
@@ -139,580 +365,224 @@ void initializeFrameBuffers(u32 framebufferWidth, u32 framebufferHeight)
     };
   glBufferData(GL_ARRAY_BUFFER, sizeof(float) * 4 * 6, frameBufferVertices, GL_STATIC_DRAW);
 
-  glBindAttribLocation(globalRenderData.frameBufferShader, 0, "position");
-  glBindAttribLocation(globalRenderData.frameBufferShader, 1, "texCoord");
-
-  glEnableVertexAttribArray(0);
-  glVertexAttribPointer(0, 2, GL_FLOAT, GL_FALSE, sizeof(float)*4 , 0);
-  glEnableVertexAttribArray(1);
-  glVertexAttribPointer(1, 2, GL_FLOAT,   GL_FALSE, sizeof(float)*4 , (const void*)(sizeof(float)*2));
- 
-  errCheck();
-}
-
-void initShadowMapInfo()
-{
-    // //Initialize shadow map // //
-  globalRenderData.shadowMapWidth = 1024;
-  globalRenderData.shadowMapHeight = 1024;
-
-  //gen frame buffer
-  glGenFramebuffers(1, &globalRenderData.shadowMap);
-  glBindFramebuffer(GL_FRAMEBUFFER, globalRenderData.shadowMap);
-  
-  //generate texture
-  glGenTextures(1, &globalRenderData.shadowMapTexture);
-  glBindTexture(GL_TEXTURE_2D, globalRenderData.shadowMapTexture);
-  glTexImage2D(GL_TEXTURE_2D, 0, GL_DEPTH_COMPONENT,
-	       globalRenderData.shadowMapWidth, globalRenderData.shadowMapHeight,
-	       0, GL_DEPTH_COMPONENT, GL_FLOAT, NULL);
-  glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
-  glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
-  glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_REPEAT);
-  glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_REPEAT);
-
-  glFramebufferTexture2D(GL_FRAMEBUFFER, GL_DEPTH_ATTACHMENT, GL_TEXTURE_2D, globalRenderData.shadowMapTexture, 0);
-  glDrawBuffer(GL_NONE);
-  glReadBuffer(GL_NONE);
-
-
-  globalRenderData.shadowMapShader = loadAndValidateShaderPair("res/shaders/shadowMapVert.glsl",
-							       "res/shaders/shadowMapFrag.glsl");
-   globalRenderData.skinnedShadowMapShader = loadAndValidateShaderPair("res/shaders/skinnedShadowMapVert.glsl",
-  								      "res/shaders/shadowMapFrag.glsl");
-  
-  globalRenderData.depthShader = loadAndValidateShaderPair("res/shaders/screenShadervert.glsl",
-							   "res/shaders/depthFrag.glsl");
-}
-
-void initRendererColourPaletteLUT()
-{
-
-  u8* colourData = readPaletteLUTFile("res/palettes/toxicPalette.palette");
-  //colour palettization
-  //generate texture
-  glGenTextures(1, &globalRenderData.colourPaletteLUT);
-  glBindTexture(GL_TEXTURE_3D, globalRenderData.colourPaletteLUT);
-  glTexImage3D(GL_TEXTURE_3D, 0, GL_RGB8,
-	       PALETTE_LUT_DIMS, PALETTE_LUT_DIMS, PALETTE_LUT_DIMS, 
-	       0, GL_RGB, GL_UNSIGNED_BYTE, colourData);
-  glTexParameteri(GL_TEXTURE_3D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
-  glTexParameteri(GL_TEXTURE_3D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
-  glTexParameteri(GL_TEXTURE_3D, GL_TEXTURE_WRAP_S, GL_REPEAT);
-  glTexParameteri(GL_TEXTURE_3D, GL_TEXTURE_WRAP_T, GL_REPEAT);
-  free(colourData);
-}
-
-u32 loadBloomShader(const char* fragmentShader)
-{
-  u32 programValue = loadAndValidateShaderPair("res/shaders/bloom/bloomVertex.glsl", fragmentShader );
-  glUseProgram(programValue);
-  setIntUniform(programValue, "srcTexture", 0);
-  return programValue;
-}
-
-void initBloomInfo()
-{
-  BloomInfo* bloomInfo = &globalRenderData.bloomInfo;
-  glGenFramebuffers(1, &bloomInfo->frameBuffer);
-  glBindFramebuffer(GL_FRAMEBUFFER, bloomInfo->frameBuffer);
-
-  for (int i = 0; i < BLOOM_SAMPLE_COUNT; i++)
-    {
-      bloomInfo->sizes[i] = {globalRenderData.frameBufferWidth / (2 * (i + 1)), globalRenderData.frameBufferHeight / (2 * (i + 1))};
-      
-      glGenTextures(1, &bloomInfo->mipTextures[i]);
-      glBindTexture(GL_TEXTURE_2D, bloomInfo->mipTextures[i]);
-      glTexImage2D(GL_TEXTURE_2D, 0, GL_R11F_G11F_B10F,
-		   (int)bloomInfo->sizes[i].x, (int)bloomInfo->sizes[i].y,
-		   0, GL_RGB, GL_FLOAT, NULL);
-      glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
-      glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
-      glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
-      glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);      
-    }
-  bloomInfo->downSampleProgram = loadBloomShader(   "res/shaders/bloom/bloomDownsample.glsl");
-  bloomInfo->firstDownSampleProgram = loadBloomShader("res/shaders/bloom/bloomFirstDownsample.glsl");
-  bloomInfo->upSampleProgram = loadBloomShader( "res/shaders/bloom/bloomUpsample.glsl");
-
-  glFramebufferTexture2D(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0,
-			 GL_TEXTURE_2D, bloomInfo->mipTextures[0], 0);
-// setup attachments
-  unsigned int attachments[1] = { GL_COLOR_ATTACHMENT0 };
-  glDrawBuffers(1, attachments);
-
-  bloomInfo->blendingProgram = loadAndValidateShaderPair("res/shaders/bloom/bloomVertex.glsl",
-							 "res/shaders/bloom/bloomMix.glsl");
-  glUseProgram(bloomInfo->blendingProgram);
-  setIntUniform(bloomInfo->blendingProgram, "srcTexture", 0);
-  setIntUniform(bloomInfo->blendingProgram, "bloomTexture", 1);
-
-  bloomInfo->strength = 0.04f;
-  bloomInfo->cutoff = 1.0f;
-  
-}
-
-void initRenderer()
-{  
-  stbi_set_flip_vertically_on_load(1);
-  glGetIntegerv(GL_MAX_TEXTURE_IMAGE_UNITS, &globalRenderData.maxTextureUnits);
-  glGetIntegerv(GL_MAX_COMBINED_TEXTURE_IMAGE_UNITS, &globalRenderData.maxTextureUnits);
-  #if DEBUG_INIT_STATS
-  printf("INIT STAT: Maximum Texture Units: %d\n", globalRenderData.maxTextureUnits);
-  printf("INIT STAT: Maximum Combined Texture Units: %d\n", globalRenderData.maxTextureUnits);
-  #endif
-
-  u32 maxTextures = 64;
-  
-  globalRenderData.textureNames = (char**)malloc(sizeof(char*) * maxTextures);
-  globalRenderData.textureKeys = (u32*)malloc(sizeof(u32) * maxTextures);
-  globalRenderData.totalUsingTexture = (u32*)calloc(sizeof(u32), maxTextures);
-  globalRenderData.textureBufferSize = maxTextures;
-  globalRenderData.wireFrameMode = 0;
-  globalRenderData.initialized = 1;
-
-  globalRenderData.meshesToDrawCount = 1;
-
-  //FRONT BUFFER
- 
-  glfwGetFramebufferSize(mainWindow.glWindow, &globalRenderData.viewportWidth, &globalRenderData.viewportHeight);
- 
-
-  #if DEBUG_INIT_STATS
-  printf("VIEWPORT WIDTH/HEIGHT: %d %d\n", globalRenderData.viewportHeight, globalRenderData.viewportWidth);
-  #endif
-
-  globalRenderData.exposure = 0.2f;
-  globalRenderData.enabledScreenShader = 0;
-  setFrameBufferShader(2);
-  globalRenderData.luminanceTemporal = 1.0f;
-  globalRenderData.exposureChangeRate = 1.0f;
-
-  globalRenderData.dirLightCount = -1;
-  globalRenderData.pointLightCount = -1;
-
-  //Dynamic geometry buffers for ui and stuff
-  for (int i = 0; i < RENDERER_BUFFER_COUNT; i++)
-    {
-      globalRenderData._vertexBufferBase[i] = (Vertex*)malloc(sizeof(Vertex) * RENDERER_MAX_VERTICES);
-      globalRenderData._vertexBufferPtr[i] = globalRenderData._vertexBufferBase[i];
-
-      globalRenderData._indexBufferBase[i] = (u32*)malloc(sizeof(u32) * RENDERER_MAX_INDICES);
-      globalRenderData._indexOffset[i] = 0;
-      globalRenderData._indexCount[i] = 0;
-
-      switch (i)
-	{
-	case 0:
-	  {
-	    globalRenderData._shaderProgramKey[i] =
-	      loadAndValidateShaderPair("res/shaders/text/textMSDFVert.glsl",
-					"res/shaders/text/textMSDFFrag.glsl");
-	  }break;
-	case 1:
-	  {
-	    globalRenderData._shaderProgramKey[i] =
-	      loadAndValidateShaderPair("res/shaders/text/textBasicVert.glsl",
-					"res/shaders/text/textBasicFrag.glsl");
-	  }break;
-	default:
-	  {
-	    Assert(0);
-	  }break;
-	}
-      
-      u32 program = globalRenderData._shaderProgramKey[i];
-      
-      //Generate gpu buffers
-      //Array
-      glGenVertexArrays(1, &globalRenderData._vertexArrayKey[i]);
-      glBindVertexArray(globalRenderData._vertexArrayKey[i]);
-      //VertexBuffer
-      glGenBuffers(1, &globalRenderData._vertexBufferKey[i]);
-      glBindBuffer(GL_ARRAY_BUFFER, globalRenderData._vertexBufferKey[i]);
-      glBufferData(GL_ARRAY_BUFFER, sizeof(Vertex) * RENDERER_MAX_VERTICES, NULL, GL_DYNAMIC_DRAW);
-
-      //IndexBuffer
-      glGenBuffers(1, &globalRenderData._indexBufferKey[i]);
-      glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, globalRenderData._indexBufferKey[i]);
-      glBufferData(GL_ELEMENT_ARRAY_BUFFER, sizeof(u32) * RENDERER_MAX_INDICES, NULL, GL_DYNAMIC_DRAW);
-
-      glBindAttribLocation(program, 0, "position");
-      glBindAttribLocation(program, 1, "normal");
-      glBindAttribLocation(program, 2, "texCoord");
-      glBindAttribLocation(program, 3, "texUnit");
-      //generate gpu vertex layout
-      glEnableVertexAttribArray(0);
-
-      glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, sizeof(float)*9 , 0);
-      glEnableVertexAttribArray(1);
-      glVertexAttribPointer(1, 3, GL_FLOAT,   GL_FALSE, sizeof(float)*9 , (const void*)(sizeof(float)*3));
-      glEnableVertexAttribArray(2);
-      glVertexAttribPointer(2, 2, GL_FLOAT, GL_FALSE, sizeof(float)*9 , (const void*)(sizeof(float)*6));
-      glEnableVertexAttribArray(3);
-      glVertexAttribPointer(3, 1, GL_FLOAT, GL_FALSE, sizeof(float)*9 , (const void*)(sizeof(float)*8));
-
-    }
-  setRendererShaderMode(0);
-
-  //Decrease to upscale
-  initializeFrameBuffers(globalRenderData.viewportWidth, globalRenderData.viewportHeight);
-  glGenerateMipmap(GL_TEXTURE_2D);
-
-  initRendererColourPaletteLUT();
-  globalRenderData.palettize = false;
-
-  initBloomInfo();
-
-  initShadowMapInfo();
-  u8* data = loadTexture(&globalRenderData.blueNoiseTex, "res/textures/LDR_RGB1_0.png", GL_REPEAT, GL_NEAREST);
-  errCheck();
-  free(data);
-
+  //Debug Geometry -----------------------------
   initDebugGeometryMesh();
-  errCheck();
-}
-
-//TODO: Clean up Renderer resources
-void deleteRenderer()
-{
-  Assert(globalRenderData.initialized);
-  for (int i = 0; i < globalRenderData.textureCount; i++)
-    {
-      if (globalRenderData.totalUsingTexture[i])
-	{
-	  glDeleteTextures(1, &globalRenderData.textureKeys[i]);
-	  free(globalRenderData.textureNames[i]);
-	}
-    }
-  glDeleteProgram(globalRenderData.shaderProgramKey);
-  glDeleteVertexArrays(1, &globalRenderData.vertexArrayKey);
-  glDeleteBuffers(1, &globalRenderData.vertexBufferKey);
-  glDeleteBuffers(1, &globalRenderData.indexBufferKey);
-
-  glDeleteFramebuffers(1, &globalRenderData.colorHDRFrameBuffer);
-
-  free(globalRenderData.textureNames);
-  free(globalRenderData.textureKeys);
-  free(globalRenderData.totalUsingTexture);
-  free(globalRenderData.vertexBufferBase);
-  free(globalRenderData.indexBufferBase);  
-}
-
   
-void addMesh(Mesh* mesh, const char* vertexShader, const char* fragmentShader, VertexLayoutComponent* layout, u32 layoutCount)
+  errCheck();
+  globalRenderData.screenShaderProgramKey =
+    loadAndValidateShaderPair( "res/shaders/screenShadervert.glsl",
+			       "res/shaders/screen_basic.glsl");
+    errCheck();
+  errCheck();
+
+}
+
+RendererMeshVAOInfo* findMeshVAOInfoSlot(RendererVAOInfo* info, u32 vertexCount, u32 indexCount)
 {
-  RendererMeshData* meshData = &mesh->rendererData;
-  //create shader program
+
+  if (info->meshInfoTail == NULL)
+    {
+      RendererMeshVAOInfo* meshInfo = (RendererMeshVAOInfo*)calloc(sizeof(RendererMeshVAOInfo), 1);
+      info->meshInfoHead = meshInfo;
+      info->meshInfoTail = meshInfo;
+      meshInfo->valid = 1;
+      meshInfo->id = 0;
+      meshInfo->startVBOIndex = 0; meshInfo->endVBOIndex = vertexCount;
+      meshInfo->startIBIndex = 0; meshInfo->endIBIndex = indexCount;
+      return meshInfo;
+    }
+  else
+    {
+      RendererMeshVAOInfo* meshInfo = info->meshInfoTail;
+      RendererMeshVAOInfo* result = (RendererMeshVAOInfo*)calloc(sizeof(RendererMeshVAOInfo), 1);
+      meshInfo->next = result;
+      result->prev = meshInfo;
+      result->valid = 1;
+      result->id = meshInfo->id + 1;
+      result->startVBOIndex = meshInfo->endVBOIndex;
+      result->endVBOIndex = result->startVBOIndex + vertexCount;
+      result->startIBIndex = meshInfo->endIBIndex;
+      result->endIBIndex = result->startIBIndex + indexCount;
+      info->meshInfoTail = result;
+      if (result->endVBOIndex >= info->maxVertexCount || result->endIBIndex >= info->maxIndexCount)
+	{
+	  //Ran out of space in buffer. Consider adding the smart fitting soon.
+	  fprintf(stderr, "\n\nWARNING. RAN OUT OF SPACE IN BUFFERS. Renderer.cpp:findMeshInfoSlot RESIZING....\n\n");
+	  resizeVAO(info, 2.0f);
+
+	}
+      return result;
+    }
+}
+
+void addMesh(Mesh* mesh, const char* vertexShader, const char* fragmentShader, VertexLayoutComponent* layout, RendererVAOInfo* vao)
+{
+  glBindVertexArray(vao->key);
+  RendererMeshVAOInfo* meshInfo = findMeshVAOInfoSlot(vao, mesh->vertexCount, mesh->indexCount);
+  errCheck();
+  //bind vertex buffer
+  glBindBuffer(GL_ARRAY_BUFFER, vao->VBOKey);
+  errCheck();
+  //Set vertex data
+  glBufferSubData(GL_ARRAY_BUFFER,
+		  meshInfo->startVBOIndex * vao->vertexSize,
+		  mesh->vertexCount * vao->vertexSize,
+		  mesh->vertices);
+  errCheck();
+  //set index data
+  glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, vao->IBKey);
+  errCheck();
+  //Set vertex data
+  glBufferSubData(GL_ELEMENT_ARRAY_BUFFER,
+		  meshInfo->startIBIndex * sizeof(u32),
+		  mesh->indexCount * sizeof(u32),
+		  (void*)mesh->indices);
+
+  mesh->vao = vao;
+  mesh->vaoMeshInfo = meshInfo;
+  meshInfo->mesh = mesh;
+  errCheck();
+  //Shader
   u32 program = glCreateProgram();
   Shader* vs = loadShader(vertexShader, GL_VERTEX_SHADER);
   Shader* fs = loadShader(fragmentShader, GL_FRAGMENT_SHADER);
-
-  //link program
-  u32 totalLayoutSize = 0;
   glAttachShader(program, vs->key);
-  for (int i = 0; i < layoutCount; i++)
-    {
-      glBindAttribLocation(program, layout[i].location, layout[i].name);
-      totalLayoutSize += layout[i].size;
-    }
   glAttachShader(program, fs->key);
-
+  
   validateShaderCompilation(vs);
   validateShaderCompilation(fs);
 
   glLinkProgram(program);
   glValidateProgram(program);
   validateShaderLink(program);
-  mesh->rendererData.shaderProgramKey = program;
 
-  errCheck();
-  //Generate gpu buffers
-  //Array
-  glGenVertexArrays(1, &meshData->vertexArrayKey);
-  glBindVertexArray(meshData->vertexArrayKey);
-  //VertexBuffer
-  glGenBuffers(1, &meshData->vertexBufferKey);
-  glBindBuffer(GL_ARRAY_BUFFER, meshData->vertexBufferKey);
-  if (mesh->skinnedMesh)
-    glBufferData(GL_ARRAY_BUFFER, sizeof(SkinnedVertex) * mesh->vertexCount, mesh->vertices, GL_DYNAMIC_DRAW);
-  else
-    glBufferData(GL_ARRAY_BUFFER, sizeof(Vertex) * mesh->vertexCount, mesh->vertices, GL_DYNAMIC_DRAW);
-
-  //IndexBuffer
-  glGenBuffers(1, &meshData->indexBufferKey);
-  glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, meshData->indexBufferKey);
-  //Adding data to thebuffer
-  //Add indices
-    
-  //TODO: triangles using indices
-  if (meshData->indexCount == 0)
-    {
-      u32 indexData[mesh->vertexCount];
-      for (int i = 0; i < mesh->vertexCount; i++)
-	{
-	  indexData[i] = i; 
-	}
-      meshData->indexCount = mesh->vertexCount;
-      glBufferData(GL_ELEMENT_ARRAY_BUFFER, meshData->indexCount * sizeof(u32), indexData, GL_DYNAMIC_DRAW);
-    }
-  else
-    {
-      glBufferData(GL_ELEMENT_ARRAY_BUFFER, meshData->indexCount * sizeof(u32), mesh->indices, GL_DYNAMIC_DRAW);   
-    }
-
-  
-  //generate gpu vertex layout
-  u64 currentOffset = 0;
-  for (int i = 0; i < layoutCount; i++)
-    {
-      glEnableVertexAttribArray(layout[i].location);
-      glVertexAttribPointer(layout[i].location, layout[i].count, layout[i].type, GL_FALSE, totalLayoutSize, (const void*)currentOffset);
-      currentOffset += layout[i].size;
-    }
-
-  
   glDetachShader(program, vs->key);
   glDetachShader(program, fs->key);
   deleteShader(vs);
   deleteShader(fs);
- }
-
+  errCheck();
+  meshInfo->programKey = program;
+  glBindVertexArray(0);
+  
+}
+void addMesh(Mesh* mesh, const char* vertexShader, const char* fragmentShader, VertexLayoutComponent* layout)
+{
+  printf("Adding mesh!\n");
+  RendererVAOInfo* vao;
+  if (layout == &defaultLayout[0])
+      {
+	vao = &globalRenderData.standardVAO;
+      }
+  else if (layout == &skinnedDefaultLayout[0])
+      {
+	vao = &globalRenderData.skinnedVAO;
+      }
+  else
+      {
+	Assert(0);
+      }
+  addMesh(mesh, vertexShader, fragmentShader, layout, vao);
+}
 void addMesh(Mesh* mesh, const char* vertexShader, const char* fragmentShader)
 {
-  addMesh(mesh, vertexShader, fragmentShader, defaultLayout, 4);
+  addMesh(mesh, vertexShader, fragmentShader, defaultLayout, &globalRenderData.standardVAO);
 }
+
 
 void drawMesh(Mesh* mesh, vec3 position, vec3 rotation, vec3 scale)
 {
-  Assert(globalRenderData.meshesToDrawCount < RENDERER_MESH_DRAW_COUNT);
-  globalRenderData.meshesToDraw[globalRenderData.meshesToDrawCount] = mesh;
-  globalRenderData.meshModelMatrices[globalRenderData.meshesToDrawCount] = transformationMatrixFromComponents(position, scale, rotation);  
-  globalRenderData.meshesToDrawCount++;
+  RendererVAOInfo* vao = mesh->vao;
+  Assert(vao->meshesToDrawCount < RENDERER_VAO_MESH_DRAW_COUNT);
+  vao->meshesToDraw[vao->meshesToDrawCount] = mesh->vaoMeshInfo;
+  vao->meshModelMatrices[vao->meshesToDrawCount] = transformationMatrixFromComponents(position, scale, rotation);  
+  vao->meshesToDrawCount++;
 }
 void drawMesh(Mesh* mesh, mat4* transform)
 {
-  Assert(globalRenderData.meshesToDrawCount < RENDERER_MESH_DRAW_COUNT);
-  globalRenderData.meshesToDraw[globalRenderData.meshesToDrawCount] = mesh;
-  globalRenderData.meshModelMatrices[globalRenderData.meshesToDrawCount] = *transform;
-  globalRenderData.meshesToDrawCount++;
+  RendererVAOInfo* vao = mesh->vao;
+  Assert(vao->meshesToDrawCount < RENDERER_VAO_MESH_DRAW_COUNT);
+  vao->meshesToDraw[vao->meshesToDrawCount] = mesh->vaoMeshInfo;
+  vao->meshModelMatrices[vao->meshesToDrawCount] = *transform;
+  vao->meshesToDrawCount++;
 }
 
-void rendererBeginScene()
+void renderPass(RendererVAOInfo* vao, mat4* lightMatrix)
 {
-  int prev = globalRenderData.currentShaderIndex;
-  for (int i = 0; i < RENDERER_BUFFER_COUNT; i++)
+  glBindVertexArray(vao->key);
+  glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, vao->IBKey);
+  for (int i = 0; i < vao->meshesToDrawCount; i++)
     {
-      setRendererShaderMode(i);
-      globalRenderData.vertexBufferPtr = globalRenderData.vertexBufferBase;
-      *globalRenderData.indexCount = 0;
-      *globalRenderData.indexOffset = 0;      
+      RendererMeshVAOInfo* meshInfo = vao->meshesToDraw[i];
+      glUseProgram(meshInfo->programKey);
+      mat4 viewMatrix = mainCamera.viewMatrix;
+      glSetModelViewProjectionMatrices(meshInfo->programKey, &mainCamera.projectionMatrix, &viewMatrix, &vao->meshModelMatrices[i]);
+      glSetNormalMatrix(meshInfo->programKey, &vao->meshModelMatrices[i]);
+
+      errCheck();
+      vec3 cameraPos = getCameraPos(&mainCamera);
+      setVec3Uniform(meshInfo->programKey, "ViewPos", cameraPos);
+
+      Mesh* mesh = (Mesh*)meshInfo->mesh;
+      
+      setLightUniform(meshInfo->programKey);
+      setMaterialUniform(meshInfo->programKey, &mesh->material);
+      setLightSpaceMatrixUniform(meshInfo->programKey, lightMatrix);
+      glActiveTexture(GL_TEXTURE0);
+      glBindTexture(GL_TEXTURE_2D, globalRenderData.shadowMapFBO.textureKey);
+
+      //glActiveTexture(GL_TEXTURE1);
+      //glBindTexture(GL_TEXTURE_3D, globalRenderData.colourPaletteLUT);
+      //glActiveTexture(GL_TEXTURE0);
+
+      //glDrawElements(GL_TRIANGLES, mesh->indexCount,
+      //     GL_UNSIGNED_INT, (void*)meshInfo->startIBIndex);
+      /*glDrawElementsBaseVertex(GL_TRIANGLES, 3,
+			       GL_UNSIGNED_INT, 0, 0);
+      glDrawElementsBaseVertex(GL_TRIANGLES, 6,
+      GL_UNSIGNED_INT,(void*)(sizeof(u32) * 3), 3);*/
+      glDrawElementsBaseVertex(GL_TRIANGLES, mesh->indexCount,
+			       GL_UNSIGNED_INT, (void*)(meshInfo->startIBIndex * sizeof(u32)),
+			       meshInfo->startVBOIndex);
+      //glDrawElementsBaseVertex(GL_TRIANGLES, INDEX_COUNT,
+      //                         GL_UNSIGNED_INT, BYTE OFFSET INTO INDICES,
+      //                         NUMBER TO ADD TO INDICES);
+
+      
+      errCheck();
     }
-  setRendererShaderMode(prev);
+  vao->meshesToDrawCount = 0;
 }
-
-//Flushes all buffers and draws scenes
-void rendererEndScene()
+void shadowMapPass(RendererVAOInfo* vao, mat4* lightMatrix)
 {
-  int prev = globalRenderData.currentShaderIndex;
-  glPolygonMode(GL_FRONT_AND_BACK, GL_FILL);
-  
-  //Iterate through all shaders to draw
-  for (int i = RENDERER_BUFFER_COUNT - 1; i >= 0; i--)
+  //Bind correct VAO
+  glBindVertexArray(vao->key);
+  //glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, vao->IBKey);
+  //glBindBuffer(GL_ARRAY_BUFFER, vao->VBOKey);
+  glUseProgram(globalRenderData.shadowMapShader);
+  setLightUniform(globalRenderData.shadowMapShader);
+  for (int i = 0; i < vao->meshesToDrawCount; i++)
     {
-      //calculate how much vertex data to send
-      uint32_t dataSize = (u8*)globalRenderData._vertexBufferPtr[i] - (u8*)globalRenderData._vertexBufferBase[i];
-      if (dataSize == 0) continue; //continue if no vertices to draw
+      RendererMeshVAOInfo* meshInfo = vao->meshesToDraw[i];
+
+
+      Mesh* mesh = (Mesh*)meshInfo->mesh;
       
-      setRendererShaderMode(i);
-      glUseProgram(globalRenderData.shaderProgramKey);
-      glBindVertexArray(globalRenderData.vertexArrayKey);
+
+      errCheck();
       
-      
-      glBindBuffer(GL_ARRAY_BUFFER, globalRenderData.vertexBufferKey);
-      glBufferData(GL_ARRAY_BUFFER, dataSize, globalRenderData.vertexBufferBase, GL_DYNAMIC_DRAW);
-
-      //Send index data
-      glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, globalRenderData.indexBufferKey);
-      glBufferData(GL_ELEMENT_ARRAY_BUFFER, *globalRenderData.indexCount * sizeof(u32), globalRenderData.indexBufferBase, GL_DYNAMIC_DRAW);
-
-      //Bind textures from texture pool
-      s32 values[16];
-      for (int j = 0; j < *globalRenderData.texturesToBindCount; j++)
-	{
-	  glActiveTexture(GL_TEXTURE0 + j);
-	  glBindTexture(GL_TEXTURE_2D, globalRenderData.texturesToBind[j]);
-	  values[j] = j;
-	}
-
-      glBindAttribLocation(globalRenderData.shaderProgramKey,4, "tex");
-      s32 location = glGetUniformLocation(globalRenderData.shaderProgramKey, "tex");
-      //if (location)
-	glUniform1iv(location, *globalRenderData.texturesToBindCount, values);
-
-      
-      setLightUniform(globalRenderData.shaderProgramKey);
-      
-      glDrawElements(GL_TRIANGLES, *globalRenderData.indexCount, GL_UNSIGNED_INT, NULL);
-      globalRenderData.texturesToBindCount = 0;
-    }
-  if (globalRenderData.wireFrameMode)
-        glPolygonMode(GL_FRONT_AND_BACK, GL_LINE);
-  setRendererShaderMode(prev);
-}
-
-
-u32 getTextureUnitByKey(u32 texKey)
-{
-  for (int i = 0; i < *globalRenderData.texturesToBindCount; i++)
-    {
-      if (globalRenderData.texturesToBind[i] == texKey)
-	{
-	  return i;
-	}
-    }
-  globalRenderData.texturesToBind[*globalRenderData.texturesToBindCount] = texKey;
-  *globalRenderData.texturesToBindCount = *globalRenderData.texturesToBindCount + 1;
-  return *globalRenderData.texturesToBindCount - 1;
-}
-
-//TODO: Calculate tight fit of directional light's orthographic matrix based on what can be seen by the main camera
-void calculateDirLightPositions(mat4 lightViewMatrix)
-{
-  vec4 corners[8];//world space
-  //NBL, NBR, NTL, NTR, FBL, FBR, FTL, FTR,
-  DirectionalLight* d = globalRenderData.dirLights + 0;
-
-  getFrustumCornersWorldSpace(corners, &mainCamera);  
-  vec4 lightViewCoords[8];
-  
-  vec3 max = { -FLT_MAX, -FLT_MAX, -FLT_MAX };
-  vec3 min = {  FLT_MAX,  FLT_MAX,  FLT_MAX };
-  for (int i = 0; i < 8; i++)
-    {
-      lightViewCoords[i] = lightViewMatrix * corners[i];//light space
-      for (int coords = 0; coords < 3; coords++)
-	{
-	  if (lightViewCoords[i][coords] > max[coords])
-	    {
-	      max[coords] = lightViewCoords[i][coords];
-	    }
-	  if (lightViewCoords[i][coords] < min[coords])
-	    {
-	      min[coords] = lightViewCoords[i][coords];
-	    }
-	}
-    }
-  
-  d->shadowMatrix = Orthographic(min.x, max.x, min.y, max.y, 0.01, 30.0);
-}
-
-
-//Assumes correct frame buffer is selected
-void shadowMapPass(mat4* lightMatrix)
-{
-    //shadow map
-  glBindFramebuffer(GL_FRAMEBUFFER, globalRenderData.shadowMap);
-  glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
-  glViewport(0,0,globalRenderData.shadowMapWidth, globalRenderData.shadowMapHeight);
-  glCullFace(GL_FRONT);
-  for (int i = 0; i < globalRenderData.meshesToDrawCount; i++)
-    {
-      Mesh* mesh = globalRenderData.meshesToDraw[i];
-      
-      glBindVertexArray(mesh->rendererData.vertexArrayKey);
-      glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, mesh->rendererData.indexBufferKey);
-
-      u32 shadowShader;
-      if (mesh->skinnedMesh)
-	{
-	  shadowShader = globalRenderData.skinnedShadowMapShader;
-	  SkinnedMesh* skinnedMesh = (SkinnedMesh*)mesh->skinnedMesh;
-	  
-	  glUseProgram(globalRenderData.skinnedShadowMapShader);
-	  calculateSkinnedCompositeMatrices(skinnedMesh);
-	  if (skinnedMesh->currentAnimation != -1) {
-	  s32 location = glGetUniformLocation(globalRenderData.skinnedShadowMapShader, "boneCompositeMatrices");
-	  //mAssert(location != -1);
-	  
-	  glUniformMatrix4fv(location, skinnedMesh->animations->jointCount, GL_FALSE, (float*)skinnedMesh->animations->compositeMatrices);
-	  }
-	  errCheck();
-	}
-	else
-	{
-	  shadowShader = globalRenderData.shadowMapShader;
-	  //normal path
-	  glUseProgram(globalRenderData.shadowMapShader);
-
-	}
       //assumes orthographic
       s32 location = glGetUniformLocation(globalRenderData.shadowMapShader, "mMatrix");
-      glUniformMatrix4fv(location, 1, GL_FALSE, (float*)&globalRenderData.meshModelMatrices[i]);
+      glUniformMatrix4fv(location, 1, GL_FALSE, (float*)&vao->meshModelMatrices[i]);
 
       location = glGetUniformLocation(globalRenderData.shadowMapShader, "lightMatrix");
       glUniformMatrix4fv(location, 1, GL_FALSE, (float*)lightMatrix);
       errCheck();      
 
-      glDrawElements(GL_TRIANGLES, mesh->rendererData.indexCount, GL_UNSIGNED_INT, NULL);
-      errCheck();      
-    }
 
-  
-}
-
-void renderPass(mat4* lightMatrix)
-{
-  //Geometry pass
-  for (int i = 0; i < globalRenderData.meshesToDrawCount; i++)
-    {
-      Mesh* mesh = globalRenderData.meshesToDraw[i];
-      //Bind this mesh's arrays
-      glBindVertexArray(mesh->rendererData.vertexArrayKey);
-      glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, mesh->rendererData.indexBufferKey);
-      glUseProgram(mesh->rendererData.shaderProgramKey);
-
-      //Generate transformation matrix
-      mat4 viewMatrix = mainCamera.viewMatrix;
-      //Send matrix
-
-      glSetModelViewProjectionMatrices(mesh->rendererData.shaderProgramKey, &mainCamera.projectionMatrix, &viewMatrix, &globalRenderData.meshModelMatrices[i]);
-
-      glSetNormalMatrix(mesh->rendererData.shaderProgramKey, &globalRenderData.meshModelMatrices[i]);
-      s32 location = glGetUniformLocation(mesh->rendererData.shaderProgramKey, "lightSpaceMatrix");
-      if (location != -1)
-	{
-	  Assert(location != -1);
-	  glUniformMatrix4fv(location, 1, GL_FALSE, (float*)lightMatrix);
-	}
-      location = glGetUniformLocation(mesh->rendererData.shaderProgramKey, "blueNoise");
-      if (location != -1)
-	{
-	  glUniform1i(location, 1);
-	}
-
-      if (mesh->skinnedMesh)
-	{
-	  SkinnedMesh* skinnedMesh = (SkinnedMesh*)mesh->skinnedMesh;
-	  if (skinnedMesh->currentAnimation != -1) {
-	  s32 location = glGetUniformLocation(mesh->rendererData.shaderProgramKey, "boneCompositeMatrices");
-	  //Assert(location != -1);
-	  glUniformMatrix4fv(location, skinnedMesh->animations->jointCount, GL_FALSE, (float*)skinnedMesh->animations->compositeMatrices);
-	  }
-	  errCheck();
-	}
-
-      vec3 cameraPos = getCameraPos(&mainCamera);
-      setVec3Uniform(mesh->rendererData.shaderProgramKey, "ViewPos", cameraPos);
-
-      setLightUniform(mesh->rendererData.shaderProgramKey);
-      setMaterialUniform(mesh->rendererData.shaderProgramKey, &mesh->material);
-      glActiveTexture(GL_TEXTURE0);
-      glBindTexture(GL_TEXTURE_2D, globalRenderData.shadowMapTexture);
-      glActiveTexture(GL_TEXTURE1);
-      glBindTexture(GL_TEXTURE_3D, globalRenderData.colourPaletteLUT);
-      glActiveTexture(GL_TEXTURE0);
-      glDrawElements(GL_TRIANGLES, mesh->rendererData.indexCount, GL_UNSIGNED_INT, NULL);
+      glDrawElementsBaseVertex(GL_TRIANGLES, mesh->indexCount,
+			       GL_UNSIGNED_INT, (void*)(meshInfo->startIBIndex * sizeof(u32)),
+			       meshInfo->startVBOIndex);
+      
       errCheck();
     }
 
@@ -720,246 +590,57 @@ void renderPass(mat4* lightMatrix)
 
 void flushMeshesAndRender()
 {
-  //Set view mode
-  if (globalRenderData.wireFrameMode)
-    {
-      glPolygonMode(GL_FRONT_AND_BACK, GL_LINE);
-    }
-  else
-    {
-      glPolygonMode(GL_FRONT_AND_BACK, GL_FILL);
-    }
-
-    //Calculate all the mesh matrices and stuff
-  /*  for (int i = 0; i < globalRenderData.meshesToDrawCount; i++)
-    {
-      Mesh* mesh = globalRenderData.meshesToDraw[i];
-      vec3 position = globalRenderData.meshTransforms[i * 3 + 0];
-      vec3 rotation = globalRenderData.meshTransforms[i * 3 + 1];
-      vec3 scale = globalRenderData.meshTransforms[i * 3 + 2];
-      globalRenderData.meshModelMatrices[i] = transformationMatrixFromComponents(position, scale, rotation);  
-      }*/
   vec3 lightPos = globalRenderData.dirLights[0].direction;
-  /*mat4 lightProjection = Orthographic(
+  mat4 lightProjection = Orthographic(
 				      -8.0f, 8.0f,
 				      -8.0f, 8.0f,
 				      0.1, 20.0f
-				      );*/
+				      );
   vec3 target = {0.0,0.0,0.0};
   vec3 up = {0.0,1.0,0.0};  
-  calculateDirLightPositions(LookAt(lightPos, target, up));
-  mat4 lightProjection = globalRenderData.dirLights[0].shadowMatrix;
+  //calculateDirLightPositions(LookAt(lightPos, target, up));
+  //mat4 lightProjection = globalRenderData.dirLights[0].shadowMatrix;
   mat4 lightMatrix = lightProjection * LookAt(lightPos, target, up);
 
-  drawDebugGeometry();
-  shadowMapPass(&lightMatrix);
+  //---------Shadow map pass -----------
+  //Bind shadowmap frame buffer
+  glBindFramebuffer(GL_FRAMEBUFFER, globalRenderData.shadowMapFBO.key);
+  glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+  glViewport(0,0,globalRenderData.shadowMapFBO.width, globalRenderData.shadowMapFBO.height);
+  glCullFace(GL_FRONT);  
+  shadowMapPass(&globalRenderData.standardVAO, &lightMatrix);
+
+
+  //---------Render pass---------------
   //Reset to other frame buffer ot draw geometry
   glCullFace(GL_BACK);
-  glViewport(0,0,globalRenderData.frameBufferWidth, globalRenderData.frameBufferHeight);
-  glBindFramebuffer(GL_FRAMEBUFFER, globalRenderData.colorHDRFrameBuffer);  
-  renderPass(&lightMatrix);
-  
+  glViewport(0,0,globalRenderData.outputFBO.width, globalRenderData.outputFBO.height);
+  glBindFramebuffer(GL_FRAMEBUFFER, globalRenderData.outputFBO.key);
+  errCheck();
+  renderPass(&globalRenderData.standardVAO, &lightMatrix);
+  globalRenderData.skinnedVAO.meshesToDrawCount = 0;
+  drawDebugGeometry();
   glViewport(0,0,globalRenderData.viewportWidth, globalRenderData.viewportHeight);
+
   
-  globalRenderData.meshesToDrawCount = 1;
-  globalRenderData.debugGeometryMesh->vertexCount = 0;
-  globalRenderData.debugGeometryMesh->rendererData.indexCount = 0;
-}
-
-
-f32 getAverageLuminanceOfFrameBuffer()
-{
-  //Get mip map pixel
-  glGenerateMipmap(GL_TEXTURE_2D);
-  int level = 1 + floorf(log2f(fmax(globalRenderData.frameBufferWidth, globalRenderData.frameBufferHeight)));
-  glGetTexImage(GL_TEXTURE_2D, level - 1, GL_RGBA, GL_FLOAT, &globalRenderData.averageColour);
-
-  //Extract luminance from pixel
-  vec4 pixel = globalRenderData.averageColour;
-  f32 luminanceAverage = (0.2125 * pixel.x) + (0.7154 * pixel.y) + (0.0721 * pixel.z);
-  f32 luminanceTemporal = globalRenderData.luminanceTemporal + (luminanceAverage - globalRenderData.luminanceTemporal) * (1 - ExpF(-globalDeltaTime * globalRenderData.exposureChangeRate));
-  return luminanceTemporal;
-  
-}
-
-//General post processing pipeline
-/*
-
-  1. bind frame buffer to render to
-  2. bind shader and VAO
-  3. bind textures
-  4. post process
-
- */
-void bloomPasses(u32 readBuffer)
-{
-
-  BloomInfo bloomInfo = globalRenderData.bloomInfo;
-  glBindFramebuffer(GL_READ_FRAMEBUFFER, globalRenderData.colorHDRFrameBuffer);
-  glBindFramebuffer(GL_DRAW_FRAMEBUFFER, bloomInfo.frameBuffer); // write to default framebuffer
-  glBlitFramebuffer(
-		    0, 0, globalRenderData.frameBufferWidth, globalRenderData.frameBufferHeight,
-		    0, 0, globalRenderData.frameBufferWidth, globalRenderData.frameBufferHeight,
-		    GL_COLOR_BUFFER_BIT, GL_NEAREST
-		    );
-  glBindFramebuffer(GL_FRAMEBUFFER, bloomInfo.frameBuffer);
-  //glDrawArrays(GL_TRIANGLES, 0, 6); //Draw
-  
-  glUseProgram(bloomInfo.firstDownSampleProgram);
-  
-  glBindVertexArray(globalRenderData.frameBufferQuadVAO);
-  glBindTexture(GL_TEXTURE_2D, globalRenderData.colorHDRFrameBufferTexture);
-  
-  glViewport(0, 0, bloomInfo.sizes[0].x, bloomInfo.sizes[0].y);
-  glFramebufferTexture2D(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0,
-			 GL_TEXTURE_2D, bloomInfo.mipTextures[0], 0);  
-
-  setVec2Uniform(bloomInfo.firstDownSampleProgram, "srcResolution", bloomInfo.sizes[0]);
-  setFloatUniform(bloomInfo.firstDownSampleProgram, "cutoff", bloomInfo.cutoff);
-  
-  glDrawArrays(GL_TRIANGLES, 0, 6);
-  glBindTexture(GL_TEXTURE_2D, bloomInfo.mipTextures[0]);
-  glUseProgram(bloomInfo.downSampleProgram);
-
-  for (int i = 1; i < BLOOM_SAMPLE_COUNT; i++)
-    {
-      glViewport(0, 0, bloomInfo.sizes[i].x, bloomInfo.sizes[i].y);
-      glFramebufferTexture2D(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0,
-                               GL_TEXTURE_2D, bloomInfo.mipTextures[i], 0);
-
-      setVec2Uniform(bloomInfo.downSampleProgram, "srcResolution", bloomInfo.sizes[i]);
-      
-      glDrawArrays(GL_TRIANGLES, 0, 6);
-      glBindTexture(GL_TEXTURE_2D, bloomInfo.mipTextures[i]);
-    }
-  glUseProgram(bloomInfo.upSampleProgram);
-  setFloatUniform(bloomInfo.upSampleProgram,"filterRadius", 0.005f);
-
-  // Enable additive blending
-  glEnable(GL_BLEND);
-  glBlendFunc(GL_ONE, GL_ONE);
-  glBlendEquation(GL_FUNC_ADD);
-  
-  for (int i = BLOOM_SAMPLE_COUNT - 1; i > 0; i--)
-    {
-
-      glBindTexture(GL_TEXTURE_2D, bloomInfo.mipTextures[i]);
-
-      glViewport(0, 0, bloomInfo.sizes[i-1].x, bloomInfo.sizes[i-1].y);
-      glFramebufferTexture2D(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0,
-                               GL_TEXTURE_2D, bloomInfo.mipTextures[i-1], 0);
-
-      glDrawArrays(GL_TRIANGLES, 0, 6);
-      glBindTexture(GL_TEXTURE_2D, bloomInfo.mipTextures[i]);
-    }
-
-  glDisable(GL_BLEND);
-  glViewport(0,0,globalRenderData.viewportWidth, globalRenderData.viewportHeight);  
-  glBindFramebuffer(GL_FRAMEBUFFER, 0);
-
-}
-
-void bloomMixing()
-{
-  //glBindFramebuffer(GL_FRAMEBUFFER,
-  glUseProgram(globalRenderData.bloomInfo.blendingProgram);
-  glActiveTexture(GL_TEXTURE0 + 0);
-  glBindTexture(GL_TEXTURE_2D, globalRenderData.colorHDRFrameBufferTexture);
-  glActiveTexture(GL_TEXTURE0 + 1);
-  glBindTexture(GL_TEXTURE_2D, globalRenderData.bloomInfo.mipTextures[0]);
-  glActiveTexture(GL_TEXTURE0 + 2);
-  glBindTexture(GL_TEXTURE_3D, globalRenderData.colourPaletteLUT);
-  errCheck();
-  setFloatUniform(globalRenderData.bloomInfo.blendingProgram, "bloomStrength", globalRenderData.bloomInfo.strength);
-  errCheck();
-  u32 location = glGetUniformLocation(globalRenderData.bloomInfo.blendingProgram, "blueNoise");
-  if (location != -1)
-    {
-      glUniform1i(location, 2);
-    }
-  location = glGetUniformLocation(globalRenderData.bloomInfo.blendingProgram, "palettize");
-  if (location != -1)
-    {
-      glUniform1i(location, globalRenderData.palettize);
-      }
-  errCheck();
-    {
-      //globalRenderData.luminanceTemporal = getAverageLuminanceOfFrameBuffer();
-      //Calculate exposure value
-      //globalRenderData.exposure = Clamp(0.2, 0.1 / globalRenderData.luminanceTemporal, 10.0);
-    }
-  setFloatUniform(globalRenderData.bloomInfo.blendingProgram, "exposure", 0.5);
-
-    errCheck();
-
-  glDrawArrays(GL_TRIANGLES, 0, 6); //Draw
-    errCheck();
-
-}
-
-void generalPostProcessingPass(u32 readFrameBuffer, u32 drawFrameBuffer)
-{
-  glBindFramebuffer(GL_FRAMEBUFFER, drawFrameBuffer);
-  // swap to screen frameBuffer
-  //glBindFramebuffer(GL_FRAMEBUFFER, frameBuffer); // back to default
-  glUseProgram(globalRenderData.frameBufferShader);
-  glBindVertexArray(globalRenderData.frameBufferQuadVAO);
-
-  //If we have autoexposure enabled, we need average luminance which is found by
-  //getting 1x1 mip map
-  u32 location = glGetUniformLocation(globalRenderData.frameBufferShader, "blueNoise");
-  if (location != -1)
-    {
-      glUniform1i(location, 1);
-    }
-
-  if (globalRenderData.enabledScreenShader == 4)
-    {
-      globalRenderData.luminanceTemporal = getAverageLuminanceOfFrameBuffer();
-      //Calculate exposure value
-      globalRenderData.exposure = Clamp(0.2, 0.1 / globalRenderData.luminanceTemporal, 10.0);
-    }
-  setFloatUniform(globalRenderData.frameBufferShader, "exposure", globalRenderData.exposure);
-  location = glGetUniformLocation(globalRenderData.frameBufferShader, "palettize");
-  if (location != -1)
-    {
-      glUniform1i(location, globalRenderData.palettize);
-    }
-
-  glDrawArrays(GL_TRIANGLES, 0, 6); //Draw
-  glBindFramebuffer(GL_READ_FRAMEBUFFER, readFrameBuffer);
-  glBindFramebuffer(GL_DRAW_FRAMEBUFFER, drawFrameBuffer); // write to default framebuffer
-  glBlitFramebuffer(
-		    0, 0, globalRenderData.viewportWidth, globalRenderData.viewportHeight,
-		    0, 0, globalRenderData.viewportWidth, globalRenderData.viewportHeight,
-		    GL_COLOR_BUFFER_BIT, GL_NEAREST
-		    );
 }
 
 void swapToFrameBufferAndDraw()
 {
-
+    //Switch back to frameBuffer
+  glBindFramebuffer(GL_FRAMEBUFFER, globalRenderData.outputFBO.key);
+  glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT); // we're not using the stencil buffer now
+  glEnable(GL_DEPTH_TEST);
   flushMeshesAndRender();
 
+  drawDebugGeometry();
+  glBindFramebuffer(GL_FRAMEBUFFER, 0); // back to default
   
-  errCheck();
-  //Dont draw wireframes on the fullscreen quad
-  glPolygonMode(GL_FRONT_AND_BACK, GL_FILL);
+  glBindVertexArray(globalRenderData.screenQuadVAO.key);
+  glBindTexture(GL_TEXTURE_2D, globalRenderData.outputFBO.textureKey);
+  glUseProgram(globalRenderData.screenShaderProgramKey);  
 
-  //generalPostProcessingPass(globalRenderData.colorHDRFrameBufferTexture, globalRenderData.bloomInfo.mipTextures[0]);
-  //generalPostProcessingPass(globalRenderData.colorHDRFrameBufferTexture, 0);
-  bloomPasses(0);
-  bloomMixing();
-
-  //Reset to wireframes if it was enabled
-  if (globalRenderData.wireFrameMode)
-    {
-      glPolygonMode(GL_FRONT_AND_BACK, GL_LINE);  
-    }
-
-  glBindFramebuffer(GL_FRAMEBUFFER, 0); // back to default  
   glDrawArrays(GL_TRIANGLES, 0, 6); //Draw
-
   
   //Draw debug console without post processing
   startGLTimer(&GPUImGUITimer);
@@ -970,21 +651,21 @@ void swapToFrameBufferAndDraw()
   endGLTimer(&GPUImGUITimer);
   glfwSwapBuffers(mainWindow.glWindow);  
 
-  //Calculate gpu time for debug info
-  //TODO: put under preprocessor
-  f32 meshTime = getGLTimerResult(&GPUMeshTimer);
-  f32 UITime = getGLTimerResult(&GPUUITimer);
-  f32 ImGuiTime = getGLTimerResult(&GPUImGUITimer);
-  GPUTotalTime = meshTime + UITime + ImGuiTime;
-
-  
   glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
-  //Switch back to frameBuffer
-  glBindFramebuffer(GL_FRAMEBUFFER, globalRenderData.colorHDRFrameBuffer);
-  glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT); // we're not using the stencil buffer now
-
-   glEnable(GL_DEPTH_TEST);
   errCheck();
+
+    
 }
+
+void deleteRenderer()
+{
+}
+u32 requestTextureKey(const char* c)
+{return 0;}
+
+void deleteTexture(const char* c)
+{
+}
+
 
 

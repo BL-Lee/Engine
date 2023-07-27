@@ -6,7 +6,7 @@ void outlineSelectedMesh()
   if (e)
     {
       AABBCollider aabb = getWorldSpaceAABBCollider(e);
-      addDebugLineBox(aabb.min, aabb.max);
+      //      addDebugLineBox(aabb.min, aabb.max);
     }
 }
 

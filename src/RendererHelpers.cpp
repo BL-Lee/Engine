@@ -194,4 +194,12 @@ void glSetNormalMatrix(u32 program, mat4* modelMatrix)
     }
 }
 
-
+void setLightSpaceMatrixUniform(u32 program, mat4* lightMatrix)
+{
+  s32 location = glGetUniformLocation(program, "lightSpaceMatrix");
+  if (location != -1)
+    {
+      Assert(location != -1);
+      glUniformMatrix4fv(location, 1, GL_FALSE, (float*)lightMatrix);
+    }
+}

@@ -27,6 +27,7 @@ Entity* requestNewEntity()
 	  e->parent = NULL;
 	  e->globalTransformDirty = true;
 	  sprintf(e->name, "ENTITY %d", g->entityCounter);
+	  g->entityCount++;
 	  return g->entities + index;
 	}
       Assert(g->entityCounter != 0xFFFFFFFF);
@@ -112,6 +113,7 @@ void deleteEntity(u32 id)
     }
   free(e->meshes);
   globalEntityRegistry->occupiedIndices[id % MAX_REGISTRY_SIZE] = 0;
+  globalEntityRegistry->entityCount--;
 }
 
 Entity* deserializeEntity(const char* filename)
@@ -124,6 +126,7 @@ Entity* deserializeEntity(const char* filename)
     }
 
   printf("DESERIALIZING %s\n", filename);
+  printf("Total Entity Count: %d\n", globalEntityRegistry->entityCount);
     
   Entity* entity = requestNewEntity(strrchr(filename,'/') + 1);
   vec3 zero = {0.0,0.0,0.0};
@@ -177,6 +180,7 @@ Entity* deserializeEntity(const char* filename)
 	{	  
 	  u32 ret = sscanf(buffer, "#meshFile %s", buffer);	  
 	  entity->meshes = loadModel(buffer, &entity->meshCount);
+	  errCheck();
 	}
       else if (strstr(buffer, "#vert"))
 	{
@@ -220,11 +224,14 @@ Entity* deserializeEntity(const char* filename)
     }
   if (entity->vertShader && entity->fragShader && entity->meshCount)
     {
+            errCheck();
       for (int i = 0; i < entity->meshCount; i++)
 	{
 	  addMesh(entity->meshes[i], entity->vertShader, entity->fragShader);
 	}
+            errCheck();
     }
+  fclose(fileHandle);
   setEntityAABBCollider(entity);
   return entity;
 }

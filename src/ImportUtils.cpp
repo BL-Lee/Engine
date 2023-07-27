@@ -60,8 +60,8 @@ struct INIS32DefaultEntry {
 
 static INIS32DefaultEntry IniS32DefaultEntries[] = {						    
   //Window
-  "frameBuffer_width", 540, &globalRenderData.frameBufferWidth, 
-  "frameBuffer_height",  360, &globalRenderData.frameBufferHeight,
+  "frameBuffer_width", 540, &globalRenderData.outputFBO.width, 
+  "frameBuffer_height",  360, &globalRenderData.outputFBO.height,
 };
 struct INIStringDefaultEntry {
   char key[INI_KEY_MAX_LENGTH];

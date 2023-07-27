@@ -21,6 +21,7 @@ struct GlobalDebugData
   f32 xAxis[DEBUG_TIMING_HISTORY_LENGTH];
   u32 selectedEntityId;
   u32 translationArrowIds[3];
+  ImGuiIO* ImGuiIo; 
 };
 
 static GlobalDebugData globalDebugData;

@@ -70,7 +70,9 @@ void deleteInputBuffer()
 //Input polling
 bool pollInputKey(int key)
 {
-  return glfwGetKey(mainWindow.glWindow, key);
+  bool ret = glfwGetKey(mainWindow.glWindow, key);
+  errCheck();
+  return ret;
 }
 vec2 pollCursorPos()
 {
@@ -91,7 +93,7 @@ void processInputs()
   f64 deltaTime = glfwGetTime() - globalStopWatch;
   globalDeltaTime = deltaTime * globalTimeScale;
   globalStopWatch = glfwGetTime();
-
+  errCheck();
   //Camera Polling
   if (pollInputKey(GLFW_KEY_A))
     {	  
@@ -142,12 +144,12 @@ void processInputs()
 	  addDebugGizmo(corners[i].xyz);
 	}
     }
-
+  errCheck();
   //Event Handling
   for (int i = 0; i < globalInputBuffer->size; i++)
     {
       InputInfo info = globalInputBuffer->buffer[i];
-      //TEMP: Timescale buttons
+      /*      //TEMP: Timescale buttons
       if (info.key == GLFW_KEY_1 && info.action == GLFW_PRESS)
 	{
 	  globalTimeScale *= 2;
@@ -165,7 +167,7 @@ void processInputs()
 	  globalPopupText.timeRemaining = 2.00;	  
 	  globalPopupText.location.y = 0.3;
 	  globalPopupText.size = 20;
-	}
+	  }*/
       //Debug Console button
       if (info.key == GLFW_KEY_GRAVE_ACCENT && info.action == GLFW_PRESS)
 	{
@@ -191,4 +193,5 @@ void processInputs()
 	}
     }
   clearInputBuffer();
+  errCheck();
 }

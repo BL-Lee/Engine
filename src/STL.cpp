@@ -42,7 +42,17 @@ Mesh** loadSTLShape(const char* fileName, vec3 offset, u32* count)
     }
 
   mesh->vertexCount = triangleCount * 3;
-  mesh->rendererData.indexCount = 0;
+  mesh->indices = (u32*)malloc(sizeof(u32) * mesh->vertexCount);
+  if (mesh->rendererData.indexCount == 0)
+    {
+      for (int i = 0; i < mesh->vertexCount; i++)
+	{
+	  mesh->indices[i] = i; 
+	}
+    }
+  mesh->rendererData.indexCount = mesh->vertexCount;
+  mesh->indexCount = mesh->vertexCount;
+
   mesh->visible = true;
   fclose(fileHandle);
 

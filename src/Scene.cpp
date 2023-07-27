@@ -35,6 +35,7 @@ bool loadScene(const char* filename)
       else if (strstr(buffer, "#newDirLight"))
 	{
 	  globalRenderData.dirLightCount++;
+	  Assert(globalRenderData.dirLightCount < RENDERER_DIRECTIONAL_LIGHT_COUNT);
 	}
       else if (strstr(buffer, "#dirLightDir"))
 	{
@@ -59,6 +60,7 @@ bool loadScene(const char* filename)
       else if (strstr(buffer, "#newPointLight"))
 	{
 	  globalRenderData.pointLightCount++;
+	  Assert(globalRenderData.dirLightCount < RENDERER_POINT_LIGHT_COUNT);
 	}
       else if (strstr(buffer, "#pointLightAmbient"))
 	{
@@ -82,6 +84,6 @@ bool loadScene(const char* filename)
 	}
       
     }
-  
+  fclose(fileHandle);
   return true;
 }

@@ -99,8 +99,8 @@ static f32 fontSize = 1.0f;
 #include "Camera.cpp"
 #include "EntityRegistry.cpp"
 #include "Random.cpp"
-#include "Font.cpp"
-static TextElement globalPopupText;
+//#include "Font.cpp"
+//static TextElement globalPopupText;
 #include "Input.cpp"
 #include "Scene.cpp"
 #include "DebugSelection.cpp"
@@ -111,9 +111,10 @@ static SkinnedAnimation* anim;
 static f32 frameElapsed = 0.0f;
 static SkinnedMesh* bobMesh;
 static Entity* debugGizmoEntity;
+static f64 prevTimeMadeDec = 0.0f;
 #include "DebugConsole.cpp"
 
-static Font* mainFont;
+//static Font* mainFont;
 
 
 
@@ -175,7 +176,7 @@ void renderWindow()
   // Start the Dear ImGui frame
   ImGui_ImplOpenGL3_NewFrame();
   ImGui_ImplGlfw_NewFrame();
-
+  errCheck();
   //Timing info
   frameElapsed += globalDeltaTime;
   while (frameElapsed >= 1.0f / anim->frameRate) {
@@ -183,7 +184,7 @@ void renderWindow()
     anim->currentFrames[1] = ( bobMesh->animations->currentFrames[1] + 1 ) % anim->frameCount;
     frameElapsed -= 1.0f / anim->frameRate;
   }
-
+  errCheck();
   //TEMP Animation info
   f32 interp = frameElapsed * anim->frameRate;
   anim->currentInterps[0] = 1 - interp;
@@ -194,34 +195,27 @@ void renderWindow()
       debugTranslateEntity();
     }
 
-  //Render Entities
-  startGLTimer(&GPUMeshTimer);
-  drawAllEntities();
-  endGLTimer(&GPUMeshTimer);
-    
-  //UI
-  startGLTimer(&GPUUITimer);
-  rendererBeginScene();
-  vec2 loc1 = {-0.3,-1.0};
-  setRendererShaderMode(RENDERER_UI_MODE);
-  printStringScreenSpace(mainFont, "Immaculate \"Deez Nuts\" my dude. qjipyz", loc1, fontSize);
-
-  if (globalPopupText.timeRemaining > 0)
+  if (globalStopWatch - prevTimeMadeDec > 0.05f)
     {
-      globalPopupText.timeRemaining -= globalDeltaTime;
-      printStringScreenSpace(mainFont, globalPopupText.string, globalPopupText.location, globalPopupText.size);
+      prevTimeMadeDec = globalStopWatch;
+      if (globalDebugData.weightedFPS > 40.0f)
+	{
+
+	  u32 state = *(u32*)&globalDeltaTime;
+	  Entity* dodec = deserializeEntity("res/entities/Dodecahedron.entity");
+	  vec3 pos = {randomBilateral32(&state),randomBilateral32(&state),randomBilateral32(&state)};
+	  dodec->position = pos;
+	  
+	}
     }
-  Vertex vertices[4] =
-    {
-      {0.0,0.0,0.0},
-      {0.0,0.5,0.0},
-      {0.5,0.5,0.0},
-      {0.5,0.0,0.0}
-    };
-  addScreenSpaceQuad(vertices + 0, vertices + 1, vertices + 2, vertices + 3);
-  rendererEndScene();
-  endGLTimer(&GPUUITimer);
 
+  //Render Entities
+  //startGLTimer(&GPUMeshTimer);
+  drawAllEntities();
+
+  //endGLTimer(&GPUMeshTimer);
+  errCheck();
+  
   //Draw origin axes
   vec3 originVertices[4] =
     {
@@ -234,12 +228,13 @@ void renderWindow()
   addDebugLine(originVertices[0], originVertices[2], originVertices[2], 0.0);
   addDebugLine(originVertices[0], originVertices[3], originVertices[3], 0.0);
 
-  outlineSelectedMesh();
+  //outlineSelectedMesh();
+  
   //Draw with frame buffer
   swapToFrameBufferAndDraw();
 
   errCheck();
-
+  //printf("%ld %ld %ld %ld\n", sizeof(Vertex), sizeof(float), sizeof(vec3), sizeof(vec2));
 }
 
 //TEMP: move light 0 in a circle
@@ -297,7 +292,7 @@ void physicsUpdate()
 	      if (e->visible && e->physicsEnabled)
 		{	      
 		  setEntityAABBCollider(e);
-		  addDebugLineBox(e->collider.aabb.min, e->collider.aabb.max, 0.0);
+		   addDebugLineBox(e->collider.aabb.min, e->collider.aabb.max, 0.0);
 		}
 	    }
 	}
@@ -327,7 +322,7 @@ int initEngine()
 {
   initGlobalIni("engineInfo.ini");
   //Open window
-   openWindow(mainWindow.height,
+  openWindow(mainWindow.height,
 	      mainWindow.width);
   
   //Init input and renderer
@@ -337,21 +332,19 @@ int initEngine()
 
   //Init font
   //mainFont = initFont("res/fonts/TIMES.ttf",80);
-  mainFont = initFontMSDF("res/fonts/TIMES.bmp", "res/fonts/TIMES_INFO.csv");
+  //mainFont = initFontMSDF("res/fonts/TIMES.bmp", "res/fonts/TIMES_INFO.csv");
 
   //Init GPU timers
   initGLTimer(&GPUMeshTimer);
   initGLTimer(&GPUUITimer);
   initGLTimer(&GPUImGUITimer);
-    
+  errCheck();    
   // Setup Dear ImGui context
   IMGUI_CHECKVERSION();
   ImGui::CreateContext();
-  ImGuiIO& io = ImGui::GetIO(); (void)io;
+  globalDebugData.ImGuiIo = &ImGui::GetIO();
   ImGui::StyleColorsDark();
-
   ImPlot::CreateContext();
-
   // Setup Platform/Renderer backends
   ImGui_ImplGlfw_InitForOpenGL(mainWindow.glWindow, true);
   ImGui_ImplOpenGL3_Init("#version 150");
@@ -363,13 +356,13 @@ int initEngine()
 	     (f32)mainWindow.width, (f32)mainWindow.height,
 	     60.0f,
 	     0.001f,30.0f,
-	     camPos, camDir);  
+	     camPos, camDir);
+        errCheck();
   setPerspectiveMatrix(&mainCamera);
 
   //Init Entities
   initEntityRegistry();
-
-  defaultTexture = requestTextureKey("textures/defaultTexture.png");
+  //defaultTexture = requestTextureKey("textures/defaultTexture.png");
 
   for (int i = 0; i < RENDERER_POINT_LIGHT_COUNT; i++)
     {
@@ -378,12 +371,12 @@ int initEngine()
       globalRenderData.pointLights[i].entityGizmoID = dodec->id;
       dodec->visible = false;
     }
-
   //TEMP: Arrows for entity selection
   Entity* arrows = deserializeEntity("res/entities/translationArrows.entity");
   globalDebugData.translationArrowIds[0] = arrows->children[0]->id;
   globalDebugData.translationArrowIds[1] = arrows->children[1]->id;
   globalDebugData.translationArrowIds[2] = arrows->children[2]->id;
+  arrows->visible = false;
 
   Entity* parentDodec = deserializeEntity("res/entities/Dodecahedron.entity");
   Entity* childDodec = deserializeEntity("res/entities/Dodecahedron.entity");
@@ -403,12 +396,14 @@ int initEngine()
   grandDodec->position.x = 1.0;
   grandDodec->scale.x = 1.0;  grandDodec->scale.y = 1.0;  grandDodec->scale.z = 1.0;
   grandDodec->parent = childDodec;
-  
+
 
   //SkinnedMesh* spiderMesh = loadFBX("res/models/Spider.fbx");
-
+  /*
   Entity* spider = requestNewEntity("spider");
+  spider->visible = false;
   Entity* debugGizmoEntity = requestNewEntity("debugGizmo");
+  debugGizmoEntity->visible = false;*/
   //debugGizmoEntity = gizmos.id;
   /*
   for (int i = 0; i < spiderMesh->meshCount; i++)
@@ -433,9 +428,12 @@ int initEngine()
       }*/
   //Entity* spider = deserializeEntity("res/entities/spiderOBJ.entity");
 
+
+
+
   bobMesh = loadMD5Mesh("res/models/bob_lamp_update.md5mesh");
   anim = loadMD5Anim("res/models/bob_lamp_update.md5anim", bobMesh);
-
+      errCheck();
   bob = requestNewEntity("bob");
   bob->position.y -= 4.0f;
   bob->position.x -= 4.0f;
@@ -443,15 +441,18 @@ int initEngine()
   bob->meshes = bobMesh->meshes;
   bob->meshCount = bobMesh->meshCount;
   bobMesh->currentAnimation = 0;
+  bob->visible = false;
   for (int i = 0; i < bobMesh->meshCount; i++)
     {      
       calculateNormals(bobMesh->meshes[i]);
-       addMesh(bobMesh->meshes[i], "res/shaders/skinnedBasicLightVertex.glsl", "res/shaders/basicFlatFrag.glsl", skinnedDefaultlayout, 6);
+      //addMesh(bobMesh->meshes[i], "res/shaders/skinnedBasicLightVertex.glsl", "res/shaders/basicFlatFrag.glsl", skinnedDefaultLayout);
+            errCheck();
       loadMaterial("res/materials/defaultMaterial.mat", &bob->meshes[i]->material);
     }
-    setEntityAABBCollider(bob);
-    /*
+  setEntityAABBCollider(bob);
+  errCheck();
 
+  /*
   //TEMP: Generate cave
   vec3i dims = {16,16,16};
   float* grid = generateCaveGrid(dims);
@@ -461,31 +462,10 @@ int initEngine()
   loadMaterial("res/materials/defaultMaterial.mat", &cave->meshes[0]->material);
   */
 
-
-    /*    mat4 inTest = {
-      0.0, 1.0, 0.0, 0.0,
-      -1.0, 0.0, 0.0, 0.0,
-      0.0, 0.0, 0.0, 0.0,
-      0.0, 0.0, 0.0, 1.0
-    };
-    mat4 outTest = {
-      0.0, -1.0, 0.0, 2.0,
-      1.0, 0.0, 0.0, 0.0,
-      0.0, 0.0, 0.0, 0.0,
-      0.0, 0.0, 0.0, 1.0
-    };
-    mat4 result = invertMat4(&inTest);
-    for (int i = 0; i < 4; i++)
-      {
-	for (int j = 0; j < 4; j++)
-	  {
-	    Assert(result[i][j] == outTest[i][j]);
-	  }
-      }
-    */
-    
+	  
   loadScene("res/scenes/testImportModel.scene");
-  //ploadScene("res/scenes/blankScene.scene");
+    //loadScene("res/scenes/blankScene.scene");
+
   return 0;
 }
 void shutDownEngine()
@@ -507,12 +487,18 @@ void shutDownEngine()
 int main(int argc, char** argv)
 {
   initEngine();
+        errCheck();
   while (!glfwWindowShouldClose(mainWindow.glWindow))
     {
+      errCheck();
       processInputs();
+            errCheck();
       idleFunc();
+            errCheck();
       physicsUpdate();
+            errCheck();
       renderWindow();
+            errCheck();
     }
   shutDownEngine(); 
   return 0;

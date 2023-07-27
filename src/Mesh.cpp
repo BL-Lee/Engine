@@ -247,7 +247,8 @@ Mesh** deserializeMeshes(const char* fileInput, u32* meshCount)
       
       //Load indices
       meshes[i]->indices = (u32*)malloc(sizeof(u32) * mHeaders[i].totalIndices);
-      meshes[i]->rendererData.indexCount = mHeaders[i].totalIndices;  
+      meshes[i]->rendererData.indexCount = mHeaders[i].totalIndices;
+      meshes[i]->indexCount = mHeaders[i].totalIndices;  
       fread(meshes[i]->indices, sizeof(u32), mHeaders[i].totalIndices, fileHandle);
 
       //Load material
@@ -437,5 +438,6 @@ bool loadMaterial(const char* filename, Material* material)
 	  fprintf(stderr, "WARNING: invalid tag in material file: %s\n", filename);
 	}
     }
+  fclose(fileHandle);
   return true;
 }

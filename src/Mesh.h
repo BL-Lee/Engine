@@ -3,6 +3,8 @@
 
 
 #include "Collision.h"
+#include "Renderer.h"
+
 struct Vertex
 {
   vec3 pos;
@@ -58,13 +60,20 @@ struct Mesh
   bool visible;
   u32 vertexCount;
   void* vertices;
-  
+
+  u32 indexCount;
   u32* indices;
+  
   
   RendererMeshData rendererData;
   Material material;
 
   void* skinnedMesh;
+
+  RendererMeshVAOInfo* vaoMeshInfo;
+  RendererVAOInfo* vao;
+
+  
 };
 
 

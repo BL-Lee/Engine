@@ -1,6 +1,18 @@
 #ifndef RENDERER_DEBUG_GEOMETRY_HEADER
 #define RENDERER_DEBUG_GEOMETRY_HEADER
 
+struct DebugGeometryVertex
+{
+  vec3 pos;
+  vec3 colour;
+};
+
+static VertexLayoutComponent debugGeometryLayout[2] =
+  {
+    "position", sizeof(vec3), 0, GL_FLOAT, 3, offsetof(DebugGeometryVertex, pos),
+    "colour", sizeof(vec3), 1, GL_FLOAT, 3, offsetof(DebugGeometryVertex, colour)
+  };
+
 void initDebugGeometryMesh();
 
 void deleteDebugGeometryWithID(u32 id);

@@ -104,6 +104,7 @@ Mesh* loadOBJFile(const char* fileName)
 
   mesh->vertexCount = triangleCount;
   mesh->rendererData.indexCount = indexCount;
+  mesh->indexCount = indexCount;
   free(buffer);
   fclose(fileHandle);
   
@@ -155,6 +156,7 @@ Mesh** loadOBJFile_Loader(const char* filename, u32* count)
 	  outMesh->indices[j] = mesh.Indices[j];
 	}
       outMesh->rendererData.indexCount = mesh.Indices.size();
+      outMesh->indexCount = mesh.Indices.size();
 
       //copy material
       objl::Material mat = mesh.MeshMaterial;
