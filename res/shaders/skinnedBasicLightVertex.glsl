@@ -17,7 +17,7 @@ uniform mat4 boneCompositeMatrices[128];
 
 #include res/shaders/basicLightingIncludes.glsl
 
-flat out vec3 ambient;
+out vec3 ambient;
 flat out vec3 diffSpecDir;
 flat out vec3 diffSpecPoint;
 out vec4 lightSpaceCoords;

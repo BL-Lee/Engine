@@ -72,10 +72,12 @@ void deleteMaterial(Material mat)
 
 void deleteMesh(Mesh* mesh)
 {
+  //TODO: Free stuff from VAO
+  
   glDeleteProgram(mesh->rendererData.shaderProgramKey);
-  glDeleteVertexArrays(1, &mesh->rendererData.vertexArrayKey);
-  glDeleteBuffers(1, &mesh->rendererData.vertexBufferKey);
-  glDeleteBuffers(1, &mesh->rendererData.indexBufferKey);
+  //glDeleteVertexArrays(1, &mesh->rendererData.vertexArrayKey);
+  //glDeleteBuffers(1, &mesh->rendererData.vertexBufferKey);
+  //glDeleteBuffers(1, &mesh->rendererData.indexBufferKey);
   //glDeleteTextures(1, &mesh->rendererData.ambientTextureKey);
   //glDeleteTextures(1, &mesh->rendererData.diffuseTextureKey);
   free(mesh->vertices);
@@ -111,7 +113,7 @@ void serializeMeshes(Mesh** meshes, u32 meshCount, const char* fileOutput)
   for (int i = 0; i < meshCount; i++)
     {
       totalFileSize += meshes[i]->vertexCount * sizeof(Vertex);
-      totalFileSize += meshes[i]->rendererData.indexCount * sizeof(u32);
+      totalFileSize += meshes[i]->indexCount * sizeof(u32);
     }  
   MeshFileHeader header = {};
   header.version = MESH_FILE_VERSION;
@@ -128,7 +130,7 @@ void serializeMeshes(Mesh** meshes, u32 meshCount, const char* fileOutput)
   for (int i = 0; i < meshCount; i++)
     {
       mHeaders[i].totalVertices = meshes[i]->vertexCount;
-      mHeaders[i].totalIndices = meshes[i]->rendererData.indexCount;
+      mHeaders[i].totalIndices = meshes[i]->indexCount;
     }
   fwrite(mHeaders, sizeof(MeshHeader), meshCount, fileHandle);
 
@@ -141,10 +143,10 @@ void serializeMeshes(Mesh** meshes, u32 meshCount, const char* fileOutput)
 	  fwrite((Vertex*)mesh->vertices + j, sizeof(Vertex) - sizeof(float), 1, fileHandle);
 	}
 
-      fwrite(mesh->indices, sizeof(u32), mesh->rendererData.indexCount, fileHandle);
+      fwrite(mesh->indices, sizeof(u32), mesh->indexCount, fileHandle);
       
 #ifdef DEBUG_PRINT_MESH_SERIALIZATION      
-      printf("\tMesh #%d\n\tVertices: %d Indices %d\n", i, mesh->vertexCount, mesh->rendererData.indexCount);      
+      printf("\tMesh #%d\n\tVertices: %d Indices %d\n", i, mesh->vertexCount, mesh->indexCount);      
 #endif
       
       //Write Material name
@@ -247,7 +249,6 @@ Mesh** deserializeMeshes(const char* fileInput, u32* meshCount)
       
       //Load indices
       meshes[i]->indices = (u32*)malloc(sizeof(u32) * mHeaders[i].totalIndices);
-      meshes[i]->rendererData.indexCount = mHeaders[i].totalIndices;
       meshes[i]->indexCount = mHeaders[i].totalIndices;  
       fread(meshes[i]->indices, sizeof(u32), mHeaders[i].totalIndices, fileHandle);
 
@@ -304,7 +305,7 @@ void calculateNormals(Mesh* mesh)
   if (mesh->skinnedMesh)
     {
       SkinnedVertex* vertices = (SkinnedVertex*)mesh->vertices;	  
-      for (int i = 0; i < mesh->rendererData.indexCount; i += 3)
+      for (int i = 0; i < mesh->indexCount; i += 3)
 	{
 	  vec3 normal = Cross(vertices[mesh->indices[i + 2]].pos - vertices[mesh->indices[i + 1]].pos,
 			      vertices[mesh->indices[i + 1]].pos - vertices[mesh->indices[i + 0]].pos);
@@ -320,7 +321,7 @@ void calculateNormals(Mesh* mesh)
   else
     {
       Vertex* vertices = (Vertex*)mesh->vertices;
-      for (int i = 0; i < mesh->rendererData.indexCount; i += 3)
+      for (int i = 0; i < mesh->indexCount; i += 3)
 	{
 	  vec3 normal = Cross(vertices[mesh->indices[i + 2]].pos - vertices[mesh->indices[i + 1]].pos,
 			      vertices[mesh->indices[i + 1]].pos - vertices[mesh->indices[i + 0]].pos);

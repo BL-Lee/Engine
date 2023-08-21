@@ -23,10 +23,6 @@ struct SkinnedVertex
 };
 struct RendererMeshData
 {
-  u32 vertexBufferKey;
-  u32 indexBufferKey;
-  u32 indexCount;
-  u32 vertexArrayKey;
   u32 shaderProgramKey;
   u32 ambientTextureKey;
   u32 diffuseTextureKey;

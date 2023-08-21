@@ -19,7 +19,7 @@ void initDebugGeometryMesh()
 
   globalRenderData.debugGeometryVAO.maxVertexCount = totalVertexCount;
   globalRenderData.debugGeometryVAO.maxIndexCount = totalVertexCount;
-  initVAO(&globalRenderData.debugGeometryVAO, sizeof(DebugGeometryVertex), debugGeometryLayout, 2);
+  initVAO(&globalRenderData.debugGeometryVAO, sizeof(DebugGeometryVertex), debugGeometryLayout, 2, 0);
   
   addMesh(m, "res/shaders/debugGeometryVert.glsl", "res/shaders/debugGeometryFrag.glsl", debugGeometryLayout, &globalRenderData.debugGeometryVAO);
   m->vertexCount = 0;

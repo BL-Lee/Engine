@@ -24,6 +24,9 @@ struct Camera
   f32 vertAngleOfView;
   f32 aspectRatio;
   f32 scale;
+
+  vec2 viewportMin;
+  vec2 viewportMax;
 };
 
 //TODO: update pos, rotation

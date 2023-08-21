@@ -1,4 +1,6 @@
 #include "EntityRegistry.h"
+#include "I_String.h"
+
 //Finds an open slot in the entity pool, initializes it and returns a pointer to it
 //Currently uses the entity's id as the key into the pool as a hash table
 // hash key: id % MAX_REGISTRY_SIZE
@@ -236,6 +238,29 @@ Entity* deserializeEntity(const char* filename)
   return entity;
 }
 
+char* getSerializedEntity(Entity* e)
+{
+  I_String allSerializedEntities = init_I_String("");
+}
+
+char* getAllSerializedEntities()
+{
+  I_String allSerializedEntities = init_I_String("");
+  
+  EntityRegistry* g = globalEntityRegistry;
+  for (int i = 0; i < MAX_REGISTRY_SIZE; i++)
+    {      
+      if (g->occupiedIndices[i])
+	{
+	  char* serializedEntity = getSerializedEntity(g->entities + i);
+	  allSerializedEntities += serializedEntity;
+	  free(serializedEntity);
+	}
+    }
+  return allSerializedEntities.buffer;
+}
+
+
 Entity* getEntityRootParent(Entity* e)
 {
   if (e->parent)
@@ -277,7 +302,7 @@ Entity* createEntityFromTriangles(Vertex* vertices, u32 vertexCount, u32* indice
   
   entity->meshes[0]->indices = (u32*)malloc(sizeof(u32) * indexCount);
   memcpy(entity->meshes[0]->indices, indices, sizeof(u32) * indexCount);
-  entity->meshes[0]->rendererData.indexCount = indexCount;
+  entity->meshes[0]->indexCount = indexCount;
   
   entity->meshCount = 1;
   entity->meshes[0]->visible = true;

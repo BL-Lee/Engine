@@ -189,7 +189,7 @@ SkinnedMesh* loadMD5Mesh(const char* fileName)
 	    int triCount;
 	    filterBlankLinesUntil(fileHandle, buffer, 512, "numtris");
 	    sscanf(buffer, "\tnumtris %d", &triCount);
-	    sm->meshes[meshIndex]->rendererData.indexCount = triCount * 3;
+	    sm->meshes[meshIndex]->indexCount = triCount * 3;
 	    sm->meshes[meshIndex]->indices = (u32*)malloc(sizeof(u32) * triCount * 3);
 	    
 	    for (int v = 0; v < triCount; v++)
@@ -313,6 +313,7 @@ SkinnedMesh* loadMD5Mesh(const char* fileName)
 //See note in Mesh.h about transform/joint storage
 void updateVertexPositionsManually(SkinnedMesh* skinnedMesh)
 {
+  fprintf(stderr, "WARNING, updating positions manually does not work anymore after renderer change\n");
   SkinnedAnimation* anim = skinnedMesh->animations;
   for (int i = 0; i < skinnedMesh->meshCount; i++)
     {
@@ -337,8 +338,8 @@ void updateVertexPositionsManually(SkinnedMesh* skinnedMesh)
 	  ((SkinnedVertex*)mesh->vertices)[v].pos = finalVertex.xyz / finalVertex.w;
 	  
 	}
-      glBindBuffer(GL_ARRAY_BUFFER, mesh->rendererData.vertexBufferKey);
-      glBufferData(GL_ARRAY_BUFFER, sizeof(SkinnedVertex) * mesh->vertexCount, mesh->vertices, GL_DYNAMIC_DRAW);
+      //      glBindBuffer(GL_ARRAY_BUFFER, mesh->rendererData.vertexBufferKey);
+      //glBufferData(GL_ARRAY_BUFFER, sizeof(SkinnedVertex) * mesh->vertexCount, mesh->vertices, GL_DYNAMIC_DRAW);
     }
 }
 

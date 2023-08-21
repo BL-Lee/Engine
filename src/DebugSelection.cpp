@@ -5,52 +5,59 @@ void addDebugGizmo(vec3 location)
   dodec->position = location;
 }
 
-void debugTranslateEntity()
+void debugTranslateEntity(Entity* entity)
 {
+  if (!globalDebugData.selectedEntityId || !entity)
+    {
+      return;
+    }
   //X axis
-  Entity* e = getEntityById(globalDebugData.selectedEntityId);
+  Entity* e = getEntityById(globalDebugData.translationArrowId);
   vec2 mouseCoords = pollCursorPos();
   Ray ray = rayFromScreenPoint(mouseCoords);
 
-  if (globalDebugData.selectedEntityId == globalDebugData.translationArrowIds[0])
+  if (globalDebugData.arrowSelected == globalDebugData.translationArrowIds[0])
     {
       Plane intersectionPlane = {
 	{0.0, 0.0, 1.0}, //normal
-	e->parent->position.z //Dist
+	e->position.z //Dist
       };
       vec3 hitLocation;
       
       if (rayPlaneCollision(&ray, &intersectionPlane, &hitLocation))
 	{
 	  //addDebugLineBox({0.0,0.0,e->parent->position.z}, hitLocation);
-	  e->parent->position.x = hitLocation.x;
+	  e->position.x = hitLocation.x;
+	  entity->position.x = hitLocation.x;
 	}
     }
-  else if (globalDebugData.selectedEntityId == globalDebugData.translationArrowIds[1])
+  else if (globalDebugData.arrowSelected == globalDebugData.translationArrowIds[1])
     {
       Plane intersectionPlane = {
 	{0.0, 0.0, 1.0}, //normal
-	e->parent->position.z //Dist
+	e->position.z //Dist
       };
 
       vec3 hitLocation;
       if (rayPlaneCollision(&ray, &intersectionPlane, &hitLocation))
 	{
 	  //addDebugLineBox({0.0,0.0,e->parent->position.z}, hitLocation);
-	  e->parent->position.y = hitLocation.y;
+	  e->position.y = hitLocation.y;
+	  entity->position.y = hitLocation.y;
 	}
     }
-  else if (globalDebugData.selectedEntityId == globalDebugData.translationArrowIds[2])
+  else if (globalDebugData.arrowSelected == globalDebugData.translationArrowIds[2])
     {
       Plane intersectionPlane = {
 	{1.0, 0.0, 0.0}, //normal
-	e->parent->position.x //Dist
+	e->position.x //Dist
       };
       vec3 hitLocation;
       if (rayPlaneCollision(&ray, &intersectionPlane, &hitLocation))
 	{
 	  //addDebugLineBox({0.0,0.0,e->parent->position.x}, hitLocation);
-	  e->parent->position.z = hitLocation.z;
+	  e->position.z = hitLocation.z;
+	  entity->position.z = hitLocation.z;
 	}
     }
 

@@ -211,7 +211,7 @@ u32 rayMeshCollisionNaive(Ray* ray, Mesh* mesh, mat4* transMatrix, f32* hit, vec
 {
   //CAUTION: DOES NTO WORK WITH SKINNED MESHES YET
   u32 hasHit = 0;
-  for (int index = 0; index < mesh->rendererData.indexCount; index+=3)
+  for (int index = 0; index < mesh->indexCount; index+=3)
     {
       //THESE ARE NOT IN WORLD SPACE YET
       vec3 positions[3];
@@ -273,7 +273,7 @@ u32 rayMeshCollision(Ray* ray, Mesh* mesh, mat4* transMatrix, f32* hit, vec3* lo
   meshSpaceRay.direction = (invTransform * meshSpaceDir).xyz;
   meshSpaceRay.origin = (invTransform * meshSpaceOrigin).xyz;
 
-  for (int index = 0; index < mesh->rendererData.indexCount; index+=3)
+  for (int index = 0; index < mesh->indexCount; index+=3)
     {
       //THESE ARE NOT IN WORLD SPACE YET
       vec3 positions[3];

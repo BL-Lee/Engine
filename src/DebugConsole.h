@@ -20,8 +20,16 @@ struct GlobalDebugData
   f32 weightedFPS;
   f32 xAxis[DEBUG_TIMING_HISTORY_LENGTH];
   u32 selectedEntityId;
+  u32 translationArrowId;
   u32 translationArrowIds[3];
-  ImGuiIO* ImGuiIo; 
+  u32 arrowSelected;
+  ImGuiIO* ImGuiIo;
+  bool wasMouseDragged;
+
+  char* currentFolder;
+  // dirent* currentFolderFiles;
+  char** currentFolderNames;
+  u32 currentFolderFileCount;
 };
 
 static GlobalDebugData globalDebugData;

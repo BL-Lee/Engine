@@ -172,6 +172,16 @@ void processInputs()
       if (info.key == GLFW_KEY_GRAVE_ACCENT && info.action == GLFW_PRESS)
 	{
 	  globalDebugData.showConsole = !globalDebugData.showConsole;
+	  if (globalDebugData.showConsole)
+	    {
+	      mainCamera.viewportMin = {700,500};
+	      mainCamera.viewportMax = {globalRenderData.viewportWidth, globalRenderData.viewportHeight};
+	    }
+	  else
+	    {
+	      mainCamera.viewportMin = {0,0};
+	      mainCamera.viewportMax = {globalRenderData.viewportWidth, globalRenderData.viewportHeight};
+	    }
 	}
       if (info.key == GLFW_MOUSE_BUTTON_LEFT)
 	{
@@ -181,7 +191,23 @@ void processInputs()
 		{
 		  globalInputBuffer->mouseHeld = true;
 		  globalInputBuffer->mouseDragStart = pollCursorPos();
-		  selectMesh(globalInputBuffer->mouseDragStart);
+		  Entity* e = screenSelectEntity(globalInputBuffer->mouseDragStart);
+		  if (e)
+		    {
+		      if (e->id != globalDebugData.translationArrowIds[0] &&
+			  e->id != globalDebugData.translationArrowIds[1] &&
+			  e->id != globalDebugData.translationArrowIds[2])
+			{
+			  Entity* arrows = getEntityById(globalDebugData.translationArrowId);
+			  arrows->position = e->position;
+			  globalDebugData.selectedEntityId = e->id;		      
+			}
+		      else
+			{
+			  globalDebugData.arrowSelected = e->id;
+		        }
+		    }
+
 		}
 
 	      //Released Mouse

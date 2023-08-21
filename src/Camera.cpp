@@ -15,11 +15,16 @@ void initCamera(Camera* c,
 		float vAOV,
 		float nearClip, float farClip,
 		vec3 pos, vec3 dir)
+		
 {
   c->aspectRatio = width / height;
   c->vertAngleOfView = vAOV;
   c->nearClip = nearClip;
   c->farClip = farClip;
+  c->width = width;
+  c->height = height;
+  c->viewportMin = {0, 0};
+  c->viewportMax = {width, height};
   c->pos = pos;
   c->direction = dir;
   vec3 zero = {0.0,0.0,0.0};

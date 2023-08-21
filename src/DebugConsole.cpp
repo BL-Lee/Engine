@@ -1,4 +1,5 @@
 #include "DebugConsole.h"
+
 //#include "DebugConsoleStyle.cpp"
 void initGeneralDebugInfo()
 {
@@ -13,6 +14,8 @@ void initGeneralDebugInfo()
   globalDebugData.weightedFPS = 0.0f;
   globalDebugData.showAABB = false;
   globalDebugData.showConsole = false;
+  globalDebugData.arrowSelected = 0;
+  globalDebugData.currentFolder = (char*)malloc(256);
 }
 
 void updateGeneralDebugInfo()
@@ -111,7 +114,7 @@ void drawDebugLightConsole()
 		  }
 		if(ImGui::CollapsingHeader("Colour"))
 		  {
-		    drawImGuiXYZSlider(&p->diffuseColour, 0.0f, 1.0f);
+		    ImGui::ColorPicker3("MyColor##4", (float*)&p->diffuseColour, ImGuiColorEditFlags_DisplayRGB | ImGuiColorEditFlags_DisplayHex);
 		  }
 		ImGui::SliderFloat("Intensity: ", &p->intensity, 0.0f, 100.0f);
 	      }
@@ -156,65 +159,11 @@ void drawDebugLightConsole()
       ImGui::Unindent();	     
     }
 }
-/*
-void drawDebugEntityConsole()
-{
-  u32 entityIndex = 0;
-    //Entities
-  //TODO: put in separate window
-  if (ImGui::CollapsingHeader("Entity"))
-    {
-      ImGui::Indent();
-      if (globalEntityRegistry->occupiedIndices[entityIndex] && globalEntityRegistry->entities[entityIndex].meshes)
-	{
-	  Entity* e = globalEntityRegistry->entities + entityIndex;
-	  ImGui::PushID(e->id);
-	  drawImGuiVec3Text(e->position, "Pos");
-	  int indexCount = 0;
-	  int vertexCount = 0;
-	  for (int m = 0; m < e->meshCount; m++)
-	    {
-	      indexCount += e->meshes[m]->rendererData.indexCount;
-	      vertexCount += e->meshes[m]->vertexCount;
-	    }
-		    
-	  ImGui::Text("Vertex Count: %d", vertexCount);
-	  ImGui::Text("Index Count: %d", indexCount);
-	  ImGui::Checkbox("Visible", (bool*)&e->visible);
 
 
-	  ImGui::Indent();
-	  if (ImGui::CollapsingHeader("mesh debug info"))
-	    {
-	      for (int m = 0; m < e->meshCount; m++)
-		{
-		  ImGui::PushID(m);
-		  ImGui::Text("indexCount: %d",e->meshes[m]->rendererData.indexCount);
-		  ImGui::Text("vertCount: %d",e->meshes[m]->vertexCount);
-		  ImGui::Checkbox("Visible", (bool*)&e->meshes[m]->visible);
-		  ImGui::PopID();
-		}
-	    }
-	  if (ImGui::CollapsingHeader("PhysicsInfo"))
-	    {
-	      ImGui::Checkbox("Gravity", (bool*)&e->gravityEnabled);
-	      ImGui::Checkbox("Physics Enabled", (bool*)&e->physicsEnabled);
-	      drawImGuiVec3Text(e->position, "Position");
-	      drawImGuiVec3Text(e->rotation, "Rotation");
-	      drawImGuiVec3Text(e->scale, "Scale");
-	      drawImGuiVec3Text(e->velocity, "Velocity");
-	    }
-
-	  ImGui::Unindent();
-	  ImGui::PopID();
-	}
-    }
-  ImGui::Unindent();
-}
-*/
 void drawDebugEntitiesConsole()
 {
-  
+
   if (ImGui::CollapsingHeader("Entities"))
   //  ImGui::Begin("Entities");
     {
@@ -240,7 +189,7 @@ void drawDebugEntitiesConsole()
 		  int vertexCount = 0;
 		  for (int m = 0; m < e->meshCount; m++)
 		    {
-		      indexCount += e->meshes[m]->rendererData.indexCount;
+		      indexCount += e->meshes[m]->indexCount;
 		      vertexCount += e->meshes[m]->vertexCount;
 		    }
 		    
@@ -253,7 +202,7 @@ void drawDebugEntitiesConsole()
 		      for (int m = 0; m < e->meshCount; m++)
 			{
 			  ImGui::PushID(m);
-			  ImGui::Text("indexCount: %d",e->meshes[m]->rendererData.indexCount);
+			  ImGui::Text("indexCount: %d",e->meshes[m]->indexCount);
 			  ImGui::Text("vertCount: %d",e->meshes[m]->vertexCount);
 			  ImGui::Checkbox("Visible", (bool*)&e->meshes[m]->visible);
 			  ImGui::PopID();
@@ -283,12 +232,94 @@ void drawDebugEntitiesConsole()
 	}
       ImGui::Unindent();
     }
-  //  ImGui::End();
-}  
+}
+
+void drawDebugFileInspector()
+{
+  ImGui::Begin("Files");
+
+  if (strcmp(globalDebugData.currentFolder,"res/entities") != 0)
+    {
+      globalDebugData.currentFolderNames = getFileNamesFromPath("res/entities", &globalDebugData.currentFolderFileCount);
+      strcpy(globalDebugData.currentFolder, "res/entities");
+
+    }
+  for (int i = 0; i < globalDebugData.currentFolderFileCount; i++)
+    {
+      ImGui::PushID(i);
+      if (i % 5 != 0)
+	ImGui::SameLine();
+      ImGui::Button(globalDebugData.currentFolderNames[i], ImVec2(60,60));
+
+      if (ImGui::BeginDragDropSource(ImGuiDragDropFlags_None))
+	{
+	  ImGui::SetDragDropPayload("DND_DEMO_CELL", globalDebugData.currentFolderNames[i], strlen(globalDebugData.currentFolderNames[i]) + 1);
+	  ImGui::Text("Copy %s", globalDebugData.currentFolderNames[i]);
+	  ImGui::EndDragDropSource();
+	}
+      if (ImGui::IsMouseDragging(0))
+	{
+	  globalDebugData.wasMouseDragged = true;
+	}
+      if (globalDebugData.wasMouseDragged && ImGui::IsMouseReleased(ImGuiMouseButton_Left))
+	{
+	  if (!globalDebugData.ImGuiIo->WantCaptureMouse)
+	    {
+	      printf("Copied!!!\n\n\n");
+	      if (const ImGuiPayload* payload = ImGui::AcceptDragDropPayload("DND_DEMO_CELL"))
+		{
+		  printf("%s\n", payload->Data);
+		  char buffer[256];
+		  sprintf(buffer, "res/entities/%s", payload->Data);
+		  Entity* entity = deserializeEntity(buffer);
+		  entity->position = screenSelectMaxDist( pollCursorPos(), 1.0f);
+		}
+	    }
+	  globalDebugData.wasMouseDragged = false;
+
+	}
+      ImGui::PopID();
+    }
+  
+  ImGui::End();
+}
+
+void drawDebugMainMenuBar()
+{
+   if (ImGui::BeginMainMenuBar())
+    {
+        if (ImGui::BeginMenu("File"))
+        {
+	  ImGui::MenuItem("(demo menu)", NULL, false, false);
+	  if (ImGui::MenuItem("Open", "Ctrl+O")) {}
+	  if (ImGui::BeginMenu("Open Recent"))
+	    {
+	      ImGui::MenuItem("fish_hat.c");
+	      ImGui::MenuItem("fish_hat.inl");
+	      ImGui::MenuItem("fish_hat.h");
+	      if (ImGui::BeginMenu("More.."))
+		{
+		  ImGui::MenuItem("Hello");
+		  ImGui::MenuItem("Sailor");
+		  ImGui::EndMenu();
+		}
+	      ImGui::EndMenu();
+	    }
+	  if (ImGui::MenuItem("Save", "Ctrl+S")) {}
+	  if (ImGui::MenuItem("Save As..")) {}
+
+	  ImGui::Separator();
+
+	  ImGui::EndMenu();
+        }
+        ImGui::EndMainMenuBar();
+    } 
+}
 
 void drawMainDebugMenu()
 {
 
+  
   ImGui::Text("Frame: %d, %.2f%%", anim->currentFrames[0], anim->currentInterps[0]);
   ImGui::Text("Frame: %d, %.2f%%", anim->currentFrames[1], anim->currentInterps[1]);
   
@@ -332,7 +363,7 @@ void drawMainDebugMenu()
       drawImGuiVec3Text(pos, "Camera Position");
     }
 
-  //Renderer info
+  //Rendererinfo
   if (ImGui::CollapsingHeader("Renderer"))
     {
       //ImGui::SliderFloat("Bloom Strength: %f", &globalRenderData.bloomInfo.strength, 0.0f, 1.0f);
@@ -438,7 +469,7 @@ void drawDebugEntityInspector()
   int vertexCount = 0;
   for (int m = 0; m < e->meshCount; m++)
     {
-      indexCount += e->meshes[m]->rendererData.indexCount;
+      indexCount += e->meshes[m]->indexCount;
       vertexCount += e->meshes[m]->vertexCount;
     }
 		    
@@ -451,7 +482,7 @@ void drawDebugEntityInspector()
       for (int m = 0; m < e->meshCount; m++)
 	{
 	  ImGui::PushID(m);
-	  ImGui::Text("indexCount: %d",e->meshes[m]->rendererData.indexCount);
+	  ImGui::Text("indexCount: %d",e->meshes[m]->indexCount);
 	  ImGui::Text("vertCount: %d",e->meshes[m]->vertexCount);
 	  ImGui::Checkbox("Visible", (bool*)&e->meshes[m]->visible);
 	  ImGui::PopID();
@@ -523,9 +554,10 @@ void drawDebugConsole()
 	}
       ImGui::EndTabBar();
     }
-  
   ImGui::End();
-
+  drawDebugMainMenuBar();  
+  drawDebugFileInspector();
+  
   ImGui::Render();
   ImGui_ImplOpenGL3_RenderDrawData(ImGui::GetDrawData());
 

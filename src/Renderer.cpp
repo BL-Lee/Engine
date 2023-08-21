@@ -199,19 +199,13 @@ void initShadowMapInfo()
   glDrawBuffer(GL_NONE);
   glReadBuffer(GL_NONE);
 
-  //SHADERS
-  //Should probably be in the mesh info
-  globalRenderData.shadowMapShader = loadAndValidateShaderPair("res/shaders/shadowMapVert.glsl",
-							       "res/shaders/shadowMapFrag.glsl");
-  globalRenderData.skinnedShadowMapShader = loadAndValidateShaderPair("res/shaders/skinnedShadowMapVert.glsl",
-  								      "res/shaders/shadowMapFrag.glsl");
   
   globalRenderData.depthShader = loadAndValidateShaderPair("res/shaders/screenShadervert.glsl",
 							   "res/shaders/depthFrag.glsl");
 }
 
 
-void initVAO(RendererVAOInfo* info, u32 vertexSize, VertexLayoutComponent* layout, u32 layoutCount)
+void initVAO(RendererVAOInfo* info, u32 vertexSize, VertexLayoutComponent* layout, u32 layoutCount, u32 shadowMapKey)
 {
 
     //Generate gpu buffers
@@ -240,6 +234,11 @@ void initVAO(RendererVAOInfo* info, u32 vertexSize, VertexLayoutComponent* layou
     }
     errCheck();
   info->vertexSize = vertexSize;
+
+
+  //SHADERS
+  //Should probably be in the mesh info
+  info->shadowMapProgramKey = shadowMapKey;
 
   info->meshesToDrawCount = 0;
   info->meshInfoCount = 0;
@@ -282,7 +281,7 @@ void resizeVAO(RendererVAOInfo* info, f32 scale)
   info->maxVertexCount = (u32)(scale * info->maxVertexCount);
   info->maxIndexCount = (u32)(scale * info->maxIndexCount);
 
-  printf("Vert: %ud, Ind: %ud\n", info->maxVertexCount, info->maxIndexCount);
+  printf("Vert: %llu, Ind: %llu\n", info->maxVertexCount, info->maxIndexCount);
 			  
   glDeleteBuffers(1, &info->IBKey);
   glDeleteBuffers(1, &info->VBOKey);
@@ -339,19 +338,25 @@ void initRenderer()
   //VAOs ---------------------
   globalRenderData.standardVAO.maxVertexCount = RENDERER_STANDARD_VAO_VBO_MAX_COUNT;
   globalRenderData.standardVAO.maxIndexCount = RENDERER_STANDARD_VAO_VBO_MAX_COUNT;
-  initVAO(&globalRenderData.standardVAO, sizeof(Vertex), defaultLayout, 4);
+  u32 shadowMapKey = loadAndValidateShaderPair("res/shaders/shadowMapVert.glsl", "res/shaders/shadowMapFrag.glsl");
+  initVAO(&globalRenderData.standardVAO, sizeof(Vertex), defaultLayout, 4, shadowMapKey);
   //globalRenderData.standardVAO.meshesToDraw = (RendererMeshVAOInfo*)calloc(sizeof(RendererMeshVAOInfo), RENDERER_STANDARD_VAO_MESH_MAX_COUNT);
   globalRenderData.standardVAO.meshInfoCount = 0;
+
+  
     errCheck();
   globalRenderData.skinnedVAO.maxVertexCount = RENDERER_SKINNED_VAO_VBO_MAX_COUNT;
   globalRenderData.skinnedVAO.maxIndexCount = RENDERER_SKINNED_VAO_VBO_MAX_COUNT;
-  initVAO(&globalRenderData.skinnedVAO, sizeof(SkinnedVertex), skinnedDefaultLayout, 6);
+  shadowMapKey = loadAndValidateShaderPair("res/shaders/skinnedShadowMapVert.glsl", "res/shaders/shadowMapFrag.glsl");
+  initVAO(&globalRenderData.skinnedVAO, sizeof(SkinnedVertex), skinnedDefaultLayout, 6, shadowMapKey);
   //globalRenderData.skinnedVAO.meshesToDraw = (RendererMeshVAOInfo*)calloc(sizeof(RendererMeshVAOInfo), RENDERER_SKINNED_VAO_MESH_MAX_COUNT);
   globalRenderData.skinnedVAO.meshInfoCount = 0;
+
+  
     errCheck();
   globalRenderData.screenQuadVAO.maxVertexCount = 6;
   globalRenderData.screenQuadVAO.maxIndexCount = 6;
-  initVAO(&globalRenderData.screenQuadVAO, sizeof(vec2) * 2, screenDefaultLayout, 2);
+  initVAO(&globalRenderData.screenQuadVAO, sizeof(vec2) * 2, screenDefaultLayout, 2, 0);
   errCheck();
   float frameBufferVertices[4 * 6] =
     {
@@ -506,7 +511,7 @@ void drawMesh(Mesh* mesh, mat4* transform)
   vao->meshesToDrawCount++;
 }
 
-void renderPass(RendererVAOInfo* vao, mat4* lightMatrix)
+void renderPass(RendererVAOInfo* vao, mat4* lightMatrix, Camera* camera)
 {
   glBindVertexArray(vao->key);
   glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, vao->IBKey);
@@ -514,12 +519,13 @@ void renderPass(RendererVAOInfo* vao, mat4* lightMatrix)
     {
       RendererMeshVAOInfo* meshInfo = vao->meshesToDraw[i];
       glUseProgram(meshInfo->programKey);
-      mat4 viewMatrix = mainCamera.viewMatrix;
-      glSetModelViewProjectionMatrices(meshInfo->programKey, &mainCamera.projectionMatrix, &viewMatrix, &vao->meshModelMatrices[i]);
+      mat4 viewMatrix = camera->viewMatrix;
+      
+      glSetModelViewProjectionMatrices(meshInfo->programKey, &camera->projectionMatrix, &viewMatrix, &vao->meshModelMatrices[i]);
       glSetNormalMatrix(meshInfo->programKey, &vao->meshModelMatrices[i]);
 
       errCheck();
-      vec3 cameraPos = getCameraPos(&mainCamera);
+      vec3 cameraPos = getCameraPos(camera);
       setVec3Uniform(meshInfo->programKey, "ViewPos", cameraPos);
 
       Mesh* mesh = (Mesh*)meshInfo->mesh;
@@ -530,53 +536,50 @@ void renderPass(RendererVAOInfo* vao, mat4* lightMatrix)
       glActiveTexture(GL_TEXTURE0);
       glBindTexture(GL_TEXTURE_2D, globalRenderData.shadowMapFBO.textureKey);
 
+      if (mesh->skinnedMesh)
+	{
+	  setSkinnedMeshUniforms(mesh, meshInfo->programKey);
+	}
+
       //glActiveTexture(GL_TEXTURE1);
       //glBindTexture(GL_TEXTURE_3D, globalRenderData.colourPaletteLUT);
       //glActiveTexture(GL_TEXTURE0);
 
-      //glDrawElements(GL_TRIANGLES, mesh->indexCount,
-      //     GL_UNSIGNED_INT, (void*)meshInfo->startIBIndex);
-      /*glDrawElementsBaseVertex(GL_TRIANGLES, 3,
-			       GL_UNSIGNED_INT, 0, 0);
-      glDrawElementsBaseVertex(GL_TRIANGLES, 6,
-      GL_UNSIGNED_INT,(void*)(sizeof(u32) * 3), 3);*/
       glDrawElementsBaseVertex(GL_TRIANGLES, mesh->indexCount,
 			       GL_UNSIGNED_INT, (void*)(meshInfo->startIBIndex * sizeof(u32)),
 			       meshInfo->startVBOIndex);
-      //glDrawElementsBaseVertex(GL_TRIANGLES, INDEX_COUNT,
-      //                         GL_UNSIGNED_INT, BYTE OFFSET INTO INDICES,
-      //                         NUMBER TO ADD TO INDICES);
-
-      
       errCheck();
     }
   vao->meshesToDrawCount = 0;
 }
 void shadowMapPass(RendererVAOInfo* vao, mat4* lightMatrix)
 {
+  //No shadows for this geometry
+  if (!vao->shadowMapProgramKey){ return; }
+  
   //Bind correct VAO
   glBindVertexArray(vao->key);
-  //glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, vao->IBKey);
-  //glBindBuffer(GL_ARRAY_BUFFER, vao->VBOKey);
-  glUseProgram(globalRenderData.shadowMapShader);
-  setLightUniform(globalRenderData.shadowMapShader);
+  glUseProgram(vao->shadowMapProgramKey);
+  setLightUniform(vao->shadowMapProgramKey);
   for (int i = 0; i < vao->meshesToDrawCount; i++)
     {
       RendererMeshVAOInfo* meshInfo = vao->meshesToDraw[i];
 
 
       Mesh* mesh = (Mesh*)meshInfo->mesh;
-      
 
-      errCheck();
+
+      if (mesh->skinnedMesh)
+	{
+	  setSkinnedMeshUniforms(mesh, vao->shadowMapProgramKey);
+	}
       
       //assumes orthographic
-      s32 location = glGetUniformLocation(globalRenderData.shadowMapShader, "mMatrix");
+      s32 location = glGetUniformLocation(vao->shadowMapProgramKey, "mMatrix");
       glUniformMatrix4fv(location, 1, GL_FALSE, (float*)&vao->meshModelMatrices[i]);
 
-      location = glGetUniformLocation(globalRenderData.shadowMapShader, "lightMatrix");
+      location = glGetUniformLocation(vao->shadowMapProgramKey, "lightMatrix");
       glUniformMatrix4fv(location, 1, GL_FALSE, (float*)lightMatrix);
-      errCheck();      
 
 
       glDrawElementsBaseVertex(GL_TRIANGLES, mesh->indexCount,
@@ -588,7 +591,7 @@ void shadowMapPass(RendererVAOInfo* vao, mat4* lightMatrix)
 
 }
 
-void flushMeshesAndRender()
+void flushMeshesAndRender(Camera* camera)
 {
   vec3 lightPos = globalRenderData.dirLights[0].direction;
   mat4 lightProjection = Orthographic(
@@ -609,6 +612,7 @@ void flushMeshesAndRender()
   glViewport(0,0,globalRenderData.shadowMapFBO.width, globalRenderData.shadowMapFBO.height);
   glCullFace(GL_FRONT);  
   shadowMapPass(&globalRenderData.standardVAO, &lightMatrix);
+  shadowMapPass(&globalRenderData.skinnedVAO, &lightMatrix);
 
 
   //---------Render pass---------------
@@ -617,7 +621,8 @@ void flushMeshesAndRender()
   glViewport(0,0,globalRenderData.outputFBO.width, globalRenderData.outputFBO.height);
   glBindFramebuffer(GL_FRAMEBUFFER, globalRenderData.outputFBO.key);
   errCheck();
-  renderPass(&globalRenderData.standardVAO, &lightMatrix);
+  renderPass(&globalRenderData.standardVAO, &lightMatrix, camera);
+  renderPass(&globalRenderData.skinnedVAO, &lightMatrix, camera);
   globalRenderData.skinnedVAO.meshesToDrawCount = 0;
   drawDebugGeometry();
   glViewport(0,0,globalRenderData.viewportWidth, globalRenderData.viewportHeight);
@@ -625,13 +630,13 @@ void flushMeshesAndRender()
   
 }
 
-void swapToFrameBufferAndDraw()
+void swapToFrameBufferAndDraw(Camera* camera)
 {
     //Switch back to frameBuffer
   glBindFramebuffer(GL_FRAMEBUFFER, globalRenderData.outputFBO.key);
   glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT); // we're not using the stencil buffer now
   glEnable(GL_DEPTH_TEST);
-  flushMeshesAndRender();
+  flushMeshesAndRender(camera);
 
   drawDebugGeometry();
   glBindFramebuffer(GL_FRAMEBUFFER, 0); // back to default
@@ -640,6 +645,8 @@ void swapToFrameBufferAndDraw()
   glBindTexture(GL_TEXTURE_2D, globalRenderData.outputFBO.textureKey);
   glUseProgram(globalRenderData.screenShaderProgramKey);  
 
+  glViewport(camera->viewportMin.x,camera->viewportMin.y,
+	     camera->viewportMax.x, camera->viewportMax.y);
   glDrawArrays(GL_TRIANGLES, 0, 6); //Draw
   
   //Draw debug console without post processing

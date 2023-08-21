@@ -80,6 +80,7 @@ static f32 fontSize = 1.0f;
 
 //Custom includes
 #include "Timer.h"
+#include "Files.cpp"
 //#include "Bitmap.cpp"
 #include "UI.h"
 
@@ -192,9 +193,10 @@ void renderWindow()
 
   if (globalInputBuffer->mouseHeld && globalDebugData.showConsole)
     {
-      debugTranslateEntity();
+      debugTranslateEntity(getEntityById(globalDebugData.selectedEntityId));
     }
 
+  /*
   if (globalStopWatch - prevTimeMadeDec > 0.05f)
     {
       prevTimeMadeDec = globalStopWatch;
@@ -208,7 +210,7 @@ void renderWindow()
 	  
 	}
     }
-
+  */
   //Render Entities
   //startGLTimer(&GPUMeshTimer);
   drawAllEntities();
@@ -231,10 +233,9 @@ void renderWindow()
   //outlineSelectedMesh();
   
   //Draw with frame buffer
-  swapToFrameBufferAndDraw();
+  swapToFrameBufferAndDraw(&mainCamera);
 
   errCheck();
-  //printf("%ld %ld %ld %ld\n", sizeof(Vertex), sizeof(float), sizeof(vec3), sizeof(vec2));
 }
 
 //TEMP: move light 0 in a circle
@@ -292,7 +293,7 @@ void physicsUpdate()
 	      if (e->visible && e->physicsEnabled)
 		{	      
 		  setEntityAABBCollider(e);
-		   addDebugLineBox(e->collider.aabb.min, e->collider.aabb.max, 0.0);
+                  addDebugLineBox(e->collider.aabb.min, e->collider.aabb.max, 0.0);
 		}
 	    }
 	}
@@ -338,7 +339,8 @@ int initEngine()
   initGLTimer(&GPUMeshTimer);
   initGLTimer(&GPUUITimer);
   initGLTimer(&GPUImGUITimer);
-  errCheck();    
+  errCheck();
+  
   // Setup Dear ImGui context
   IMGUI_CHECKVERSION();
   ImGui::CreateContext();
@@ -357,7 +359,10 @@ int initEngine()
 	     60.0f,
 	     0.001f,30.0f,
 	     camPos, camDir);
+  mainCamera.viewportMin = {0, 0};
+  mainCamera.viewportMax = {globalRenderData.viewportWidth, globalRenderData.viewportHeight};
         errCheck();
+	
   setPerspectiveMatrix(&mainCamera);
 
   //Init Entities
@@ -369,14 +374,15 @@ int initEngine()
       Entity* dodec = deserializeEntity("res/entities/LightGizmo.entity");
       dodec->position = globalRenderData.pointLights[i].position;
       globalRenderData.pointLights[i].entityGizmoID = dodec->id;
-      dodec->visible = false;
+      dodec->visible = true;
     }
   //TEMP: Arrows for entity selection
   Entity* arrows = deserializeEntity("res/entities/translationArrows.entity");
   globalDebugData.translationArrowIds[0] = arrows->children[0]->id;
   globalDebugData.translationArrowIds[1] = arrows->children[1]->id;
   globalDebugData.translationArrowIds[2] = arrows->children[2]->id;
-  arrows->visible = false;
+  globalDebugData.translationArrowId = arrows->id;
+  //arrows->visible = true;
 
   Entity* parentDodec = deserializeEntity("res/entities/Dodecahedron.entity");
   Entity* childDodec = deserializeEntity("res/entities/Dodecahedron.entity");
@@ -447,9 +453,9 @@ int initEngine()
       calculateNormals(bobMesh->meshes[i]);
       //addMesh(bobMesh->meshes[i], "res/shaders/skinnedBasicLightVertex.glsl", "res/shaders/basicFlatFrag.glsl", skinnedDefaultLayout);
             errCheck();
-      loadMaterial("res/materials/defaultMaterial.mat", &bob->meshes[i]->material);
+            //loadMaterial("res/materials/defaultMaterial.mat", &bob->meshes[i]->material);
     }
-  setEntityAABBCollider(bob);
+  //setEntityAABBCollider(bob);
   errCheck();
 
   /*
@@ -464,7 +470,7 @@ int initEngine()
 
 	  
   loadScene("res/scenes/testImportModel.scene");
-    //loadScene("res/scenes/blankScene.scene");
+  //  loadScene("res/scenes/blankScene.scene");
 
   return 0;
 }

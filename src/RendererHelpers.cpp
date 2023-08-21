@@ -203,3 +203,17 @@ void setLightSpaceMatrixUniform(u32 program, mat4* lightMatrix)
       glUniformMatrix4fv(location, 1, GL_FALSE, (float*)lightMatrix);
     }
 }
+
+//Skinned
+
+void setSkinnedMeshUniforms(Mesh* mesh, u32 programKey)
+{
+  SkinnedMesh* skinnedMesh = (SkinnedMesh*)mesh->skinnedMesh;
+	  
+  calculateSkinnedCompositeMatrices(skinnedMesh);
+  if (skinnedMesh->currentAnimation != -1)
+    {
+      s32 location = glGetUniformLocation(programKey, "boneCompositeMatrices");
+      glUniformMatrix4fv(location, skinnedMesh->animations->jointCount, GL_FALSE, (float*)skinnedMesh->animations->compositeMatrices);
+    }
+}

@@ -104,6 +104,8 @@ struct RendererVAOInfo
   u32 key;
   u32 VBOKey;
   u32 IBKey;
+  u32 shadowMapProgramKey;
+  
   u64 maxVertexCount;
   u64 maxIndexCount;  
 
@@ -137,9 +139,6 @@ struct RendererData
   FrameBufferInfo outputFBO;
   FrameBufferInfo shadowMapFBO;
 
-  u32 skinnedShadowMapShader;
-  u32 shadowMapShader;
-  
   //Lights
   PointLight pointLights[RENDERER_POINT_LIGHT_COUNT];
   s32 pointLightCount;
@@ -202,7 +201,7 @@ static RendererData globalRenderData;
 
 
 void initRenderer();
-void initVAO(RendererVAOInfo* info, u32 vertexSize, VertexLayoutComponent* layout, u32 layoutCount);
+void initVAO(RendererVAOInfo* info, u32 vertexSize, VertexLayoutComponent* layout, u32 layoutCount, u32 shadowMapKey);
 u8* loadTexture(u32* textureKey, const char* textureFile);
 u32 requestTextureKey(const char* textureName);
 u32 getTextureUnitByKey(u32 texKey);
