@@ -243,27 +243,32 @@ void drawDebugFileInspector()
       globalDebugData.currentFolderNames = getFileNamesFromPath("res/entities", &globalDebugData.currentFolderFileCount);
       strcpy(globalDebugData.currentFolder, "res/entities");
 
-    }
+    }  
   for (int i = 0; i < globalDebugData.currentFolderFileCount; i++)
     {
       ImGui::PushID(i);
       if (i % 5 != 0)
 	ImGui::SameLine();
       ImGui::Button(globalDebugData.currentFolderNames[i], ImVec2(60,60));
-
-      if (ImGui::BeginDragDropSource(ImGuiDragDropFlags_None))
+      
+      //Start drag
+      if (globalDebugData.ImGuiIo->WantCaptureMouse)
 	{
-	  ImGui::SetDragDropPayload("DND_DEMO_CELL", globalDebugData.currentFolderNames[i], strlen(globalDebugData.currentFolderNames[i]) + 1);
-	  ImGui::Text("Copy %s", globalDebugData.currentFolderNames[i]);
-	  ImGui::EndDragDropSource();
+	  if (ImGui::BeginDragDropSource(ImGuiDragDropFlags_None))
+	    {
+	      ImGui::SetDragDropPayload("DND_DEMO_CELL", globalDebugData.currentFolderNames[i], strlen(globalDebugData.currentFolderNames[i]) + 1);
+	      ImGui::Text("Copy %s", globalDebugData.currentFolderNames[i]);
+	      ImGui::EndDragDropSource();
+	    }
+	  if (ImGui::IsMouseDragging(0))
+	    {
+	      globalDebugData.wasMouseDragged = true;
+	    }
 	}
-      if (ImGui::IsMouseDragging(0))
+      //End Drag
+      if (!globalDebugData.ImGuiIo->WantCaptureMouse)
 	{
-	  globalDebugData.wasMouseDragged = true;
-	}
-      if (globalDebugData.wasMouseDragged && ImGui::IsMouseReleased(ImGuiMouseButton_Left))
-	{
-	  if (!globalDebugData.ImGuiIo->WantCaptureMouse)
+	  if (globalDebugData.wasMouseDragged && ImGui::IsMouseReleased(ImGuiMouseButton_Left))
 	    {
 	      printf("Copied!!!\n\n\n");
 	      if (const ImGuiPayload* payload = ImGui::AcceptDragDropPayload("DND_DEMO_CELL"))
@@ -274,9 +279,8 @@ void drawDebugFileInspector()
 		  Entity* entity = deserializeEntity(buffer);
 		  entity->position = screenSelectMaxDist( pollCursorPos(), 1.0f);
 		}
+	      globalDebugData.wasMouseDragged = false;
 	    }
-	  globalDebugData.wasMouseDragged = false;
-
 	}
       ImGui::PopID();
     }
@@ -373,21 +377,7 @@ void drawMainDebugMenu()
       //Wireframe
       ImGui::Checkbox("Wireframes" , &globalRenderData.wireFrameMode);
       //ImGui::Checkbox("Palettize" , &globalRenderData.palettize);
-      //Index counts for renderer buffers
-      /*      for (int i = 0; i < RENDERER_BUFFER_COUNT; i++)
-	{
-	  switch(i)
-	    {
-	    case RENDERER_UI_MODE:
-	      ImGui::Text("UI");
-	      break;
-	    case RENDERER_TEXTURE_MODE:
-	      ImGui::Text("Textured");
-	      break;
-	    }
-	  ImGui::Text("Index Count: %d", globalRenderData._indexCount[i]);
-	}
-      */
+
       //PostProcessing values
       /*ImGui::ColorEdit4("Average Color:", &globalRenderData.averageColour.x);
       ImGui::Text("Exposure: %f", globalRenderData.exposure);

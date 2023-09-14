@@ -240,7 +240,19 @@ Entity* deserializeEntity(const char* filename)
 
 char* getSerializedEntity(Entity* e)
 {
-  I_String allSerializedEntities = init_I_String("");
+  I_String entityBuffer = init_I_String("#entity");
+  entityBuffer += "\n#eposition ";
+  entityBuffer += e->position;
+
+  entityBuffer += "\n#erotation ";
+  entityBuffer += e->rotation;
+
+  entityBuffer += "\n#escale ";
+  entityBuffer += e->rotation;
+  
+  entityBuffer += "\n\n";
+
+  return entityBuffer.buffer;
 }
 
 char* getAllSerializedEntities()

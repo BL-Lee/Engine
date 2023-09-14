@@ -6,7 +6,8 @@ struct I_String
   u32 curBufferLen;
   u32 bufferLen;
   
-  I_String &operator+=(char* b);
+  I_String operator+=(const char* b);
+  I_String operator+=(vec3 b);
   
 };
 
@@ -26,7 +27,13 @@ void delete_I_String(I_String i)
   i.buffer = 0;
 }
 
-I_String operator+(I_String& a, char* b)
+void resize_I_String(I_String* i)
+{
+  i->buffer = (char*)realloc(i->buffer, i->bufferLen * 2);
+  i->bufferLen *= 2;	      
+}
+
+I_String operator+(I_String& a, const char* b)
 {
   u32 bLen = strnlen(b, 2048);
   if (bLen == 2048 || bLen == 2047)
@@ -36,8 +43,7 @@ I_String operator+(I_String& a, char* b)
 
   while (a.curBufferLen + bLen > a.bufferLen)
     {
-      a.buffer = (char*)realloc(a.buffer, a.bufferLen * 2);
-      a.bufferLen *= 2;	      
+      resize_I_String(&a);
     }
 
   sprintf(a.buffer, "%s%s", a.buffer, b);
@@ -45,7 +51,26 @@ I_String operator+(I_String& a, char* b)
   return a;
 }
 
-I_String &I_String::operator+=(char* b)
+I_String operator+(I_String& a, vec3 b)
+{
+  char buffer[256];
+  sprintf(buffer, "%f %f %f", b.x, b.y, b.z);
+  while (a.curBufferLen + strlen(buffer) > a.bufferLen)
+    {
+      resize_I_String(&a);
+    }
+
+  sprintf(a.buffer, "%s%s", a.buffer, buffer);
+  
+  return a;
+}
+
+I_String I_String::operator+=(vec3 b)
+{
+  *this = *this + b;
+  return *this;
+}
+I_String I_String::operator+=(const char* b)
 {
   *this = *this + b;
   return *this;
